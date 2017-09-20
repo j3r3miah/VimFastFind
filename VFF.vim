@@ -56,15 +56,16 @@
 :endfunction
 
 :function! VffSetupDeActivationKey ()
-:  exec 'nnoremap ' . g:vffFindActKeySeq . ' :call VffQuit ()<CR>:echo<CR>'
-:  exec 'vnoremap ' . g:vffFindActKeySeq . ' :call VffQuit ()<CR>:echo<CR>'
-:  exec 'nnoremap ' . g:vffGrepActKeySeq . ' :call VffQuit ()<CR>:echo<CR>'
-:  exec 'vnoremap ' . g:vffGrepActKeySeq . ' :call VffQuit ()<CR>:echo<CR>'
+:  exec 'nnoremap ' . g:vffFindActKeySeq . ' :call VffDeActivate ("find")<CR>'
+:  exec 'vnoremap ' . g:vffFindActKeySeq . ' :call VffDeActivate ("find")<CR>'
+:  exec 'nnoremap ' . g:vffGrepActKeySeq . ' :call VffDeActivate ("grep")<CR>'
+:  exec 'vnoremap ' . g:vffGrepActKeySeq . ' :call VffDeActivate ("grep")<CR>'
 :endfunction
 
 :call VffSetupActivationKey ()
 
-:let g:vff_lastline = -1
+:let g:vff_greplastline = -1
+:let g:vff_findlastline = -1
 
 :function! VffListBufs (mode)
 :  let g:vff_mode = a:mode
@@ -88,10 +89,10 @@
 :  setlocal cc=
 :  let &report = l:saveReport
 :  exec 'ruby $vff.enter("' . g:vff_mode . '")'
-:  if g:vff_mode == 'grep'
-:     if g:vff_lastline != -1
-:        exec g:vff_lastline
-:     endif
+:  if g:vff_mode == 'grep' && g:vff_greplastline != -1
+:     exec g:vff_greplastline
+:  elseif g:vff_mode == 'find' && g:vff_findlastline != -1
+:     exec g:vff_findlastline
 :  endif
 :  set nomodified
 :endfunction
@@ -154,7 +155,7 @@
 :    nnoremap <buffer> D        :call VffText('D')<CR>
 :    nnoremap <buffer> E        :call VffText('E')<CR>
 :    nnoremap <buffer> F        :call VffText('F')<CR>
-:    nnoremap <buffer> G        :call VffText('a')<CR>
+:    nnoremap <buffer> G        :call VffText('G')<CR>
 :    nnoremap <buffer> H        :call VffText('H')<CR>
 :    nnoremap <buffer> I        :call VffText('I')<CR>
 :    nnoremap <buffer> J        :call VffText('J')<CR>
@@ -192,7 +193,7 @@
 :    nnoremap <buffer> <        :call VffText('<')<CR>
 :    nnoremap <buffer> >        :call VffText('>')<CR>
 :    nnoremap <buffer> /        :call VffText('/')<CR>
-:    nnoremap <buffer> \        :call VffText('\')<CR>
+:    nnoremap <buffer> \        :call VffText('\\')<CR>
 :    nnoremap <buffer> !        :call VffText('!')<CR>
 :    nnoremap <buffer> @        :call VffText('@')<CR>
 :    nnoremap <buffer> #        :call VffText('#')<CR>
@@ -213,7 +214,7 @@
 :    nnoremap <buffer> =        :call VffText('=')<CR>
 :    nnoremap <buffer> "        :call VffText('"')<CR>
 :    nnoremap <buffer> ~        :call VffText('~')<CR>
-:    nnoremap <buffer> '        :call VffText("'")<CR>
+:    nnoremap <buffer> '        :call VffText('\''')<CR>
 :    nnoremap <buffer> \|       :call VffText("\|")<CR>
 :    nnoremap <buffer> <C-U>    :call VffClear()<CR>
 :    nnoremap <buffer> <BS>     :call VffBackspace()<CR>
@@ -265,10 +266,6 @@
             end
         end
         def enter(mode)
-            if (mode == 'find')
-                @findtext = ''
-            end
-
             buffer = VIM::Buffer.current
             if (@foundvff)
 
@@ -304,10 +301,7 @@
                 VIM::command(":  normal G")
                 VIM::command(":  call VffSetupSelect ()")
 
-                if (mode == 'grep')
-                    _refresh(mode, true)
-                end
-
+                _refresh(mode, true)
             else
                 VIM::command(":  call VffSetupBadSelect ()")
                 hook=<<EOS
@@ -531,10 +525,18 @@ EOF
 :  endif
 :endfunction
 
+:function! VffSaveLineNumber ()
+:  if g:vff_mode == "find"
+:     let g:vff_findlastline = line(".")
+:  elseif g:vff_mode == "grep"
+:     let g:vff_greplastline = line(".")
+:  endif
+:endfunction
+
 " updates the entry line immediately but don't refresh the results until the next CursorHold event
 :function! VffText (ch)
 :  exec "ruby $vff.text_append('" . g:vff_mode . "' , '" . a:ch . "')"
-:  let g:vff_lastline = line(".")
+:  call VffSaveLineNumber ()
 :  echo ""
 :  if exists("g:vff_refreshdelay")
 :    let g:vff_needrefresh = 1
@@ -546,7 +548,7 @@ EOF
 " updates the entry line immediately but don't refresh the results until the next CursorHold event
 :function! VffBackspace ()
 :  exec "ruby $vff.text_backspace('" . g:vff_mode . "')"
-:  let g:vff_lastline = line(".")
+:  call VffSaveLineNumber ()
 :  echo ""
 :  if exists("g:vff_refreshdelay")
 :    let g:vff_needrefresh = 1
@@ -558,7 +560,7 @@ EOF
 " updates the entry and results immediately
 :function! VffClear ()
 :  exec "ruby $vff.text_clear('" . g:vff_mode . "')"
-:  let g:vff_lastline = line(".")
+:  call VffSaveLineNumber ()
 :  echo ""
 :endfunction
 
@@ -569,13 +571,13 @@ EOF
 :  else
 :    7
 :  endif
-:  let g:vff_lastline = line(".")
+:  call VffSaveLineNumber ()
 :  echo ""
 :endfunction
 
 :function! VffDown(v)
 :  silent! exec "normal! " . a:v . "j"
-:  let g:vff_lastline = line(".")
+:  call VffSaveLineNumber ()
 :  echo ""
 :endfunction
 
@@ -601,6 +603,16 @@ EOF
 :  endif
 :  if g:vffRemoveBrowserBuffer
 :    silent! exec "bd " . l:myBufNr
+:  endif
+:endfunction
+
+:function! VffDeActivate (mode)
+:  call VffQuit()
+:  if a:mode != g:vff_mode
+"     Toggle between find/grep modes
+:     call VffListBufs (a:mode)
+:  else
+:     echo ""
 :  endif
 :endfunction
 
