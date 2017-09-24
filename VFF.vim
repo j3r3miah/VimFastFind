@@ -48,6 +48,9 @@
 " END configuration.
 "
 
+" The header and text entry take up 6 lines, so the first result is line 7
+let firstResultLineNumber = 7
+
 :function! VffSetupActivationKey ()
 :  exec 'nnoremap ' . g:vffFindActKeySeq . ' :call VffListBufs ("find")<CR>'
 :  exec 'vnoremap ' . g:vffFindActKeySeq . ' :call VffListBufs ("find")<CR>'
@@ -95,6 +98,7 @@
 :     exec g:vff_findlastline
 :  endif
 :  set nomodified
+:  call VffGoToFirstResult ()
 :endfunction
 
 :function! VffClearSetup ()
@@ -522,6 +526,7 @@ EOF
 :  if exists("g:vff_needrefresh")
 :    if exists("g:vff_refreshdelay")
 :      exec "ruby $vff.refresh('" . g:vff_mode . "')"
+:      call VffGoToFirstResult ()
 :    endif
 :    unlet g:vff_needrefresh
 :  endif
@@ -545,6 +550,7 @@ EOF
 :  else
 :    exec "ruby $vff.refresh('" . g:vff_mode . "')"
 :  endif
+:  call VffGoToFirstResult ()
 :endfunction
 
 " updates the entry line immediately but don't refresh the results until the next CursorHold event
@@ -557,6 +563,7 @@ EOF
 :  else
 :    exec "ruby $vff.refresh('" . g:vff_mode . "')"
 :  endif
+:  call VffGoToFirstResult ()
 :endfunction
 
 " updates the entry and results immediately
@@ -564,14 +571,15 @@ EOF
 :  exec "ruby $vff.text_clear('" . g:vff_mode . "')"
 :  call VffSaveLineNumber ()
 :  echo ""
+:  call VffGoToFirstResult ()
 :endfunction
 
 :function! VffUp(v)
 :  let l:line = line(".")
-:  if l:line - a:v > 7
+:  if l:line - a:v > g:firstResultLineNumber
 :    silent! exec "normal! " . a:v . "k"
 :  else
-:    7
+:    call VffGoToFirstResult ()
 :  endif
 :  call VffSaveLineNumber ()
 :  echo ""
@@ -581,6 +589,10 @@ EOF
 :  silent! exec "normal! " . a:v . "j"
 :  call VffSaveLineNumber ()
 :  echo ""
+:endfunction
+
+:function! VffGoToFirstResult()
+:  exec g:firstResultLineNumber
 :endfunction
 
 :function! VffUnsetupSelect ()
@@ -596,7 +608,7 @@ EOF
 :  let l:line = getline(".")
 :  let l:lineNr = line(".")
 :  quit
-:  if l:line != "" && l:lineNr >= 7
+:  if l:line != "" && l:lineNr >= g:firstResultLineNumber
 :    exec 'ruby $vff.relativepath("' . getcwd() . '", "/' . substitute(l:line, "([0-9]\\+):.*", "", "") . '")'
 :    silent exec "edit " . fnameescape(g:vffrubyret)
 :    if g:vff_mode == 'grep'
