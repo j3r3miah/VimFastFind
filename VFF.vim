@@ -216,8 +216,8 @@
 :    nnoremap <buffer> ~        :call VffText('~')<CR>
 :    nnoremap <buffer> '        :call VffText('\''')<CR>
 :    nnoremap <buffer> \|       :call VffText("\|")<CR>
-:    nnoremap <buffer> <C-U>    :call VffClear()<CR>
 :    nnoremap <buffer> <BS>     :call VffBackspace()<CR>
+:    nnoremap <buffer> <C-L>    :call VffClear()<CR>
 :    nnoremap <buffer> <M-J>    :call VffDown(1)<CR>
 :    nnoremap <buffer> <M-K>    :call VffUp(1)<CR>
 :    nnoremap <buffer> <A-J>    :call VffDown(1)<CR>
@@ -236,6 +236,8 @@
 :    nnoremap <buffer> <C-K>    :call VffUp(1)<CR>
 :    nnoremap <buffer> <DOWN>   :call VffDown(1)<CR>
 :    nnoremap <buffer> <UP>     :call VffUp(1)<CR>
+:    nnoremap <buffer> <C-U>    :call VffUp(10)<CR>
+:    nnoremap <buffer> <C-D>    :call VffDown(10)<CR>
 :    cabbr <buffer> w q
 :    cabbr <buffer> wq q
 :    call VffSetupDeActivationKey ()
@@ -592,8 +594,9 @@ EOF
 :  let &timeoutlen = g:vff_savetimeoutlen
 :  let l:myBufNr = bufnr ("%")
 :  let l:line = getline(".")
+:  let l:lineNr = line(".")
 :  quit
-:  if l:line != ""
+:  if l:line != "" && l:lineNr >= 7
 :    exec 'ruby $vff.relativepath("' . getcwd() . '", "/' . substitute(l:line, "([0-9]\\+):.*", "", "") . '")'
 :    silent exec "edit " . fnameescape(g:vffrubyret)
 :    if g:vff_mode == 'grep'
