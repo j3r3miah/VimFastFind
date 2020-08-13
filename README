@@ -21,7 +21,7 @@ exclude <pattern>
 
 Patterns are matched in order and short circuit on match. Directories
 be matched against the exclude list and not scanned if they match. Unmatched
-files will be excluded, unmatched directories will be scanned. 
+files will be excluded, unmatched directories will be scanned.
 
 You can include *'s at the start and/or the end of the pattern, not in the
 middle.
@@ -31,6 +31,13 @@ middle.
 Example:
 
 [~/work/project] % cat .vff
+# exclude hidden files
+exclude .*
+
+# exclude git dir
+exclude .git
+
+# include source files
 include *.c
 include *.cs
 include *.cpp

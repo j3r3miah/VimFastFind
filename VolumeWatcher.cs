@@ -96,7 +96,7 @@ namespace VimFastFind
 
         void Trace(string s)
         {
-//            Console.WriteLine(s);
+            // Console.WriteLine(s);
         }
 
         public void Dispose()

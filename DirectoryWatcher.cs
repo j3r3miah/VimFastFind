@@ -214,7 +214,7 @@ namespace VimFastFind {
         }
 
         static void Trace(string s) {
-//            Console.WriteLine("[watcher] " + s);
+            // Console.WriteLine("[watcher] " + s);
         }
 
 #if SYSTEM_MACOSX

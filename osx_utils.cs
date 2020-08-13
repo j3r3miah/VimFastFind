@@ -1142,8 +1142,8 @@ namespace OSXUtils
         public const string kIOPSACPowerValue = "AC Power";
         public const string kIOPSBatteryPowerValue = "Battery Power";
 
-//        [DllImport(LibraryPath)]
-//        public static extern IntPtr /*CFDictionaryRef*/ IOPSCopyExternalPowerAdapterDetails(); //NOTE: 10.6 only
+        // [DllImport(LibraryPath)]
+        // public static extern IntPtr /*CFDictionaryRef*/ IOPSCopyExternalPowerAdapterDetails(); //NOTE: 10.6 only
 
         [DllImport(LibraryPath)]
         public static extern IntPtr /*CFTypeRef*/ IOPSCopyPowerSourcesInfo();
