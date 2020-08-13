@@ -1,7 +1,6 @@
 To make server:
 
-% genmake make
-% make
+% build.sh
 
 -------------------------------------------------------------------------------
 
@@ -10,21 +9,6 @@ To install for Vim:
 You will need Vim compiled with Ruby support.
 
 % ./install.sh
-
--------------------------------------------------------------------------------
-
-This all works way better in Neovim.
-
-In Neovim, it requires you to have a plugin manager like Vundle or Pathogen or
-vim-plug, then install the node-host and the neovim-vff plugin.
-
-:BundleInstall neovim/node-host
-:BundleInstall dannydulai/neovim-vff
-:UpdateRemotePlugins
-
-You will need to navigate to the node-host directory
-(~/.vim/bundle/node-host) and run "npm install"
-
 
 -------------------------------------------------------------------------------
 
