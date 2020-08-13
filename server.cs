@@ -90,15 +90,7 @@ namespace VimFastFind {
         }
 
         public void Go(List<string> paths) {
-#if PLATFORM_WINDOWS
-            if (Directory.Exists("c:\\cygwin64")) {
-                Utils.RunProcess("c:\\cygwin64\\bin\\cygpath.exe", "-w " + this.InitDir, out _dir);
-            } else {
-                Utils.RunProcess("c:\\cygwin\\bin\\cygpath.exe", "-w " + this.InitDir, out _dir);
-            }
-#else
             _dir = this.InitDir;
-#endif
             _dir = _dir.Trim();
             while (_dir.Length > 0 && _dir[_dir.Length-1] == Path.DirectorySeparatorChar)
                 _dir = _dir.Substring(0, _dir.Length-1);
@@ -108,14 +100,7 @@ namespace VimFastFind {
             _fswatcher = new DirectoryWatcher(_dir);
             _fswatcher.EnableWatchingContents = true;
             _fswatcher.Initialize();
-
-#if PLATFORM_WINDOWS
-            _fswatcher.FileAdded += ev_FileChanged;
-            _fswatcher.FileRemoved += ev_FileChanged;
-            _fswatcher.FileModified += ev_FileChanged;
-#elif PLATFORM_MACOSX
             _fswatcher.SubdirectoryChanged += ev_SubdirChanged;
-#endif
 
             if (paths != null) {
                 _paths = paths;
@@ -518,7 +503,7 @@ namespace VimFastFind {
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
-                                // Console.WriteLine("find! {0}", line);
+                                    // Console.WriteLine("find! {0}", line);
                                     StringBuilder sb = new StringBuilder();
                                     int i = 0;
                                     foreach (string m in _grepmatcher.Match(line.Substring(line.IndexOf("match")+6), 200)) {

@@ -3,11 +3,9 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Collections.Generic;
-#if PLATFORM_MACOSX
 using MonoMac;
 using MonoMac.Foundation;
 using OSXUtils;
-#endif
 
 namespace VimFastFind {
     // uses VolumeWatcher so on mac your application's main thread must be in a
@@ -26,32 +24,18 @@ namespace VimFastFind {
         // we periodically poll to ensure the directory still exists. we don't need to poll on mac
         // because FsEventsWatcher notifies of root changes.
 
-#if PLATFORM_MACOSX
         FsEventsWatcher _fswatcher;
-#else
-        FileSystemWatcher _fswatcher;
-        System.Threading.Timer _availabletimer;
-#endif
-
-#if PLATFORM_MACOSX || PLATFORM_WINDOWS
         VolumeWatcher _volwatcher;
-#endif
 
         // fires when directory disappears (volume unmounted, dir renamed, dir
         // deleted) and when directory reappears (volume mounted, dir
         // created/restored).
         public event AvailabilityChangedDelegate AvailabilityChanged;
 
-#if PLATFORM_MACOSX
         // on mac we don't have information about specific file changes.
         // instead of firing added/removed we fire this event indicating that
         // something happened inside the subdirectory provided.
         public event ContentsChangedDelegate SubdirectoryChanged;
-#else
-        public event ContentsChangedDelegate FileAdded;
-        public event ContentsChangedDelegate FileRemoved;
-        public event ContentsChangedDelegate FileModified;
-#endif
 
         public DirectoryWatcher(string path)
         {
@@ -60,20 +44,9 @@ namespace VimFastFind {
 
         public void Initialize()
         {
-#if PLATFORM_MACOSX || PLATFORM_WINDOWS
             _volwatcher = new VolumeWatcher();
             _volwatcher.VolumeChanged += ev_VolumeChanged;
-#endif
-
-#if PLATFORM_WINDOWS
-            _volwatcher.DriveToWatchForRemoval = System.IO.Path.GetPathRoot(_fullpath);
-#endif
-
-#if PLATFORM_MACOSX
             ThreadPool.QueueUserWorkItem(delegate { _CheckAvailable(false); });
-#else
-            _availabletimer = new System.Threading.Timer(delegate { _CheckAvailable(false); }, null, 0, 5000);
-#endif
         }
 
         public string Path

@@ -1,17 +1,10 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
-#if PLATFORM_WINDOWS
-using System.Windows.Forms;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-using Dolinay; // DriveDetector
-#elif PLATFORM_MACOSX
 using MonoMac;
 using MonoMac.Foundation;
 using MonoMac.AppKit;
 using MonoMac.ObjCRuntime;
-#endif
 
 namespace VimFastFind
 {
@@ -31,45 +24,20 @@ namespace VimFastFind
     //
     public class VolumeWatcher : IDisposable
     {
-#if PLATFORM_MACOSX
 #pragma warning disable 0414
         VolumeWatcherHelper _helper;
 #pragma warning restore 0414
-#elif PLATFORM_WINDOWS
-        DriveDetector _detector;
-        string _hookeddrive;
-#endif
 
         public event VolumeWatcherEventDelegate VolumeChanged;
 
         public VolumeWatcher()
         {
-#if PLATFORM_MACOSX
             _helper = new VolumeWatcherHelper(this);
-#elif PLATFORM_WINDOWS
-            _detector = new DriveDetector();
-            _detector.DeviceArrived += delegate(object sender, DriveDetectorEventArgs e) {
-                if (e.Drive == _hookeddrive) e.HookQueryRemove = true;
-                ev_VolumeChanged(VolumeWatcherEvent.DidMount, e.Drive);
-            };
-            _detector.DeviceRemoved += delegate(object sender, DriveDetectorEventArgs e) {
-                ev_VolumeChanged(VolumeWatcherEvent.DidUnmount, e.Drive);
-            };
-            _detector.QueryRemove += delegate(object sender, DriveDetectorEventArgs e) {
-                // QueryRemove only gets fired if the device is "hooked" (see
-                // DriveDetector for explanation) and only one drive can be hooked
-                // at a time. may need to fix if this event is needed.
-                ev_VolumeChanged(VolumeWatcherEvent.WillUnmount, e.Drive);
-            };
-#else
-            throw new NotSupportedException();
-#endif
         }
 
         // returns the list of connected volumes.
         public static IList<string> ScanVolumes()
         {
-#if PLATFORM_MACOSX
             var list = new List<string>();
             using (NSAutoreleasePool pool = new NSAutoreleasePool())
             {
@@ -77,14 +45,6 @@ namespace VimFastFind
                     list.Add(path);
             }
             return list;
-#elif PLATFORM_WINDOWS
-            var list = new List<string>();
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
-                list.Add(drive.RootDirectory.FullName);
-            return list;
-#else
-            throw new NotSupportedException();
-#endif
         }
 
         void ev_VolumeChanged(VolumeWatcherEvent evt, string volume)
@@ -101,16 +61,9 @@ namespace VimFastFind
 
         public void Dispose()
         {
-#if PLATFORM_MACOSX
             _helper.Dispose();
-#elif PLATFORM_WINDOWS
-            _detector.Dispose();
-#else
-            throw new NotSupportedException();
-#endif
         }
 
-#if PLATFORM_MACOSX
         [Register]
         public class VolumeWatcherHelper : NSObject
         {
@@ -179,20 +132,5 @@ namespace VimFastFind
                 }
             }
         }
-
-#elif PLATFORM_WINDOWS
-        public string DriveToWatchForRemoval
-        {
-            get
-            {
-                return _hookeddrive;
-            }
-            set
-            {
-                _hookeddrive = value;
-                _detector.EnableQueryRemove(value);
-            }
-        }
-#endif
     }
 }
