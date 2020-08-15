@@ -1,6 +1,7 @@
 using System;
 
 namespace VimFastFind {
+#if DEBUG
     public class Logger {
         string _prefix;
 
@@ -16,4 +17,10 @@ namespace VimFastFind {
             Console.WriteLine(_prefix + fmt, args);
         }
     }
+#else
+    public class Logger {
+        public Logger(string name) {}
+        public void Trace(string fmt, params object[] args) {}
+    }
+#endif
 }
