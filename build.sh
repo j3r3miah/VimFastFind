@@ -1,15 +1,21 @@
 #!/bin/sh
 
-mkdir -p build/
+if [ "$1" == "release" ]; then
+    BUILD_DIR="build/release"
+    FLAGS="-debug:pdbonly /optimize -d:NDEBUG"
+else
+    BUILD_DIR="build/debug"
+    FLAGS="/debug -d:TRACE -d:DEBUG"
+fi
 
-cp -p ./MonoMac.dll build/
+mkdir -p $BUILD_DIR/
 
-# debug build
-# mcs -platform:x64 -noconfig -d:MONO /nologo /out:build/VFFServer.exe -d:SYSTEM_OSX /unsafe -d:SYSTEM_MACOSX /warn:4 -d:ARCH_X64 /debug /target:exe -d:DEBUG -d:HAVE_MONO_POSIX -d:TRACE -d:PLATFORM_MACOSX -d:PLATFORM_OSX /r:System.dll /r:System.Core.dll /r:Mono.Posix.dll /r:./MonoMac.dll ./server.cs ./utils.cs ./DirectoryWatcher.cs ./VolumeWatcher.cs ./osx_utils.cs
+cp -p ./MonoMac.dll $BUILD_DIR/
 
-# release build
-mcs -platform:x64 -noconfig -d:MONO /nologo /out:build/VFFServer.exe /target:exe -debug:pdbonly /warn:4 /optimize /unsafe \
-    -d:PLATFORM_OSX -d:HAVE_MONO_POSIX -d:SYSTEM_OSX -d:ARCH_X64 -d:NDEBUG -d:SYSTEM_MACOSX -d:PLATFORM_MACOSX \
+mcs -platform:x64 -noconfig -d:MONO /nologo /out:$BUILD_DIR/VFFServer.exe \
+    /target:exe /unsafe /warn:4 \
+    $FLAGS \
+    -d:PLATFORM_OSX -d:HAVE_MONO_POSIX -d:SYSTEM_OSX -d:ARCH_X64 -d:SYSTEM_MACOSX -d:PLATFORM_MACOSX \
     /r:System.dll /r:System.Core.dll /r:Mono.Posix.dll /r:./MonoMac.dll \
     ./server.cs \
     ./matcher.cs \
@@ -20,7 +26,7 @@ mcs -platform:x64 -noconfig -d:MONO /nologo /out:build/VFFServer.exe /target:exe
     ./osx_utils.cs \
     ./logger.cs
 
-cat > ./build/VFFServer <<- 'EOM'
+cat > ./$BUILD_DIR/VFFServer <<- 'EOM'
 #!/bin/sh
 MY_PATH="`dirname \"$0\"`"
 MY_PATH="`( cd \"$MY_PATH\" && pwd )`"
@@ -30,4 +36,4 @@ if [ x$LLDB = x1 ]; then export MAYBE_DEBUG="lldb -o run"; export MAYBE_DEBUG2="
 exec $MAYBE_DEBUG mono64 $MAYBE_DEBUG2 --debug "$MY_PATH/VFFServer.exe" "$@"
 EOM
 
-chmod +x ./build/VFFServer
+chmod +x ./$BUILD_DIR/VFFServer

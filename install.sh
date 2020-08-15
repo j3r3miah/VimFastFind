@@ -1,7 +1,8 @@
 #!/bin/sh
 
-make -j9 config=release
+./build.sh release
 mkdir -p ~/.vim/plugin/VFF
 cp VFF.vim ~/.vim/plugin/
-cp bin/release/*.exe ~/.vim/plugin/VFF
-cp bin/release/*.dll ~/.vim/plugin/VFF
+cp VFF.rb ~/.vim/plugin/VFF
+cp build/release/*.exe ~/.vim/plugin/VFF
+cp build/release/*.dll ~/.vim/plugin/VFF
