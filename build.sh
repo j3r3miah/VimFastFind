@@ -11,7 +11,14 @@ cp -p ./MonoMac.dll build/
 mcs -platform:x64 -noconfig -d:MONO /nologo /out:build/VFFServer.exe /target:exe -debug:pdbonly /warn:4 /optimize /unsafe \
     -d:PLATFORM_OSX -d:HAVE_MONO_POSIX -d:SYSTEM_OSX -d:ARCH_X64 -d:NDEBUG -d:SYSTEM_MACOSX -d:PLATFORM_MACOSX \
     /r:System.dll /r:System.Core.dll /r:Mono.Posix.dll /r:./MonoMac.dll \
-    ./server.cs ./matcher.cs ./utils.cs ./DirectoryWatcher.cs ./VolumeWatcher.cs ./osx_utils.cs ./logger.cs
+    ./server.cs \
+    ./matcher.cs \
+    ./config.cs \
+    ./utils.cs \
+    ./DirectoryWatcher.cs \
+    ./VolumeWatcher.cs \
+    ./osx_utils.cs \
+    ./logger.cs
 
 cat > ./build/VFFServer <<- 'EOM'
 #!/bin/sh

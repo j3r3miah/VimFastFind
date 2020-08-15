@@ -14,46 +14,14 @@ namespace VimFastFind {
     public abstract class Matcher : IDisposable {
         protected string _dir;
         protected List<string> _paths = new List<string>();
+        DirectoryWatcher _fswatcher;
 
         public List<string> Paths { get { return _paths; } }
 
-        List<MatchRule> _rules = new List<MatchRule>();
-        DirectoryWatcher _fswatcher;
-
-        class MatchRule {
-            public bool Include;
-            public bool Starts;
-            public bool Ends;
-            public string Value;
-
-            public MatchRule(bool include, string v) {
-                this.Include = include;
-
-                if (v[0]          == '*') this.Ends   = true;
-                if (v[v.Length-1] == '*') this.Starts = true;
-
-                if (v == "*")
-                    this.Value = "";
-                else if (this.Starts && this.Ends)
-                    this.Value = v.Substring(1, v.Length-2);
-                else if (this.Starts)
-                    this.Value = v.Substring(0, v.Length-1);
-                else if (this.Ends)
-                    this.Value = v.Substring(1);
-                else
-                    this.Value = v;
-            }
-
-            public bool Match(string e) {
-                if (Starts && !Ends) return e.StartsWith(Value);
-                if (Ends && !Starts) return e.EndsWith(Value);
-                if (Ends && Starts) return e.IndexOf(Value) != -1;
-                return e == Value;
-            }
-        }
+        public List<MatchRule> Rules { get; set; }
 
         public bool IsFileOk(string name, bool onlyexclude=false) {
-            foreach (var mr in _rules) {
+            foreach (var mr in Rules) {
                 if (!onlyexclude && mr.Include) {
                     if (mr.Match(name))
                         return true;
@@ -68,18 +36,6 @@ namespace VimFastFind {
         public string TrimPath(string fullpath) {
             if (_dir == fullpath) return "";
             return fullpath.Substring(_dir.Length+1);
-        }
-
-        public void Include(string e) {
-            var mr = new MatchRule(true, e);
-            _rules.Add(mr);
-            Logger.Trace("+ {0}", e);
-        }
-        public void Exclude(string e) {
-            var mr = new MatchRule(false, e);
-            mr.Include = false;
-            _rules.Add(mr);
-            Logger.Trace("- {0}", e);
         }
 
         public string InitDir { get; private set; }

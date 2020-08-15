@@ -15,18 +15,17 @@ namespace VimFastFind {
         static Dictionary<string, PathMatcher> __pathmatchercache = new Dictionary<string, PathMatcher>();
         static Dictionary<string, GrepMatcher> __grepmatchercache = new Dictionary<string, GrepMatcher>();
 
+        Logger _logger = new Logger("server");
+
         PathMatcher _pathmatcher;
         GrepMatcher _grepmatcher;
-
-        TcpClient _client;
-        Logger _logger;
-
         bool _ownspath;
         bool _ownsgrep;
 
+        TcpClient _client;
+
         public Client(TcpClient client) {
             _client = client;
-            _logger = new Logger("client");
             (new Thread(ev_client) { IsBackground = true }).Start();
         }
 
@@ -68,21 +67,13 @@ namespace VimFastFind {
                                     }
 
                                 } else if (s[0] == "go") {
-                                    _logger.Trace("go! {0}", s);
                                     if (_ownspath) _pathmatcher.Go(null);
                                     if (_ownsgrep) _grepmatcher.Go(_pathmatcher.Paths);
 
-
-                                } else if (s[0] == "config" && s.Length > 1) {
-                                    _logger.Trace("config: '{0}'", string.Join(" ", s));
-                                    if (s[1] == "include") {
-                                        if (_ownspath) _pathmatcher.Include(s[2]);
-                                        if (_ownsgrep) _grepmatcher.Include(s[2]);
-
-                                    } else if (s[1] == "exclude") {
-                                        if (_ownspath) _pathmatcher.Exclude(s[2]);
-                                        if (_ownsgrep) _grepmatcher.Exclude(s[2]);
-                                    }
+                                } else if (s[0] == "config") {
+                                    var rules = new ConfigParser().LoadRules(s[1]);
+                                    if (_ownspath) _pathmatcher.Rules = rules;
+                                    if (_ownsgrep) _grepmatcher.Rules = rules;
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
