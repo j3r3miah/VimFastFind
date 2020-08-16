@@ -188,6 +188,14 @@ EOS
         _refresh(mode, true)
     end
 
+    def text_set(mode, s)
+        if (mode == 'find')
+            @findtext = s
+        else
+            @greptext = s
+        end
+    end
+
     def refresh(mode)
         _refresh(mode, true)
     end
@@ -230,13 +238,13 @@ EOS
                     end
                     if (line == nil && doretry)
                         connect()
-                        _refresh2(mode, false)
+                        _refresh2(mode, true, false)
                     end
                 end
             rescue
                 if (doretry)
                     connect()
-                    _refresh2(mode, false)
+                    _refresh2(mode, true, false)
                 end
             end
         end
