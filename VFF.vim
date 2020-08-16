@@ -1,15 +1,12 @@
-if !has('nvim')
 " The key sequence that should activate the buffer browser. The default is ^F.
 "   Enter the key sequence in a single quoted string, exactly as you would use
 "   it in a map command.
-"
-
 if !exists("g:vffFindActKeySeq")
-    let vffFindActKeySeq = '<C-F>'
+  let vffFindActKeySeq = '<C-F>'
 endif
 
 if !exists("g:vffGrepActKeySeq")
-    let vffGrepActKeySeq = '<C-E>'
+  let vffGrepActKeySeq = '<C-E>'
 endif
 
 " The name of the browser. The default is "/---Select File---", but you can
@@ -25,7 +22,6 @@ let vffWindowName = '/---\ Select\ File\ ---'
 "   buffer numbers for the new buffers created.
 let vffRemoveBrowserBuffer = 1
 
-"
 " A non-zero value for the variable highlightOnlyFilename will highlight only
 "   the filename instead of the whole path. The default value is 0.
 let highlightOnlyFilename = 0
@@ -83,9 +79,9 @@ function! VffListBufs (mode)
   setlocal noswapfile
   let g:vff_vffwin = winnr()
   if g:vff_mode == 'find'
-     syn match Title "Find File:.*"
+    syn match Title "Find File:.*"
   else
-     syn match Title "Find Content:.*"
+    syn match Title "Find Content:.*"
   endif
   syn match Title "----------------*"
   hi CursorLine   cterm=NONE ctermbg=darkblue ctermfg=white
@@ -93,9 +89,9 @@ function! VffListBufs (mode)
   let &report = l:saveReport
   exec 'ruby $vff.enter("' . g:vff_mode . '")'
   if g:vff_mode == 'grep' && g:vff_greplastline != -1
-     exec g:vff_greplastline
+    exec g:vff_greplastline
   elseif g:vff_mode == 'find' && g:vff_findlastline != -1
-     exec g:vff_findlastline
+    exec g:vff_findlastline
   endif
   set nomodified
   call VffGoToFirstResult ()
@@ -270,9 +266,9 @@ endfunction
 
 function! VffSaveLineNumber ()
   if g:vff_mode == "find"
-     let g:vff_findlastline = line(".")
+    let g:vff_findlastline = line(".")
   elseif g:vff_mode == "grep"
-     let g:vff_greplastline = line(".")
+    let g:vff_greplastline = line(".")
   endif
 endfunction
 
@@ -360,10 +356,10 @@ endfunction
 function! VffDeActivate (mode)
   call VffQuit()
   if a:mode != g:vff_mode
-"     Toggle between find/grep modes
-     call VffListBufs (a:mode)
+    " Toggle between find/grep modes
+    call VffListBufs (a:mode)
   else
-     echo ""
+    echo ""
   endif
 endfunction
 
@@ -373,4 +369,3 @@ function! VffQuit ()
   silent! exec "bd " . l:myBufNr
   call VffUnsetupSelect()
 endfunction
-endif
