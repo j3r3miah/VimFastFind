@@ -111,9 +111,7 @@ class VFF
 
   def connect2()
     @sock = TCPSocket.open("127.0.0.1", 20398)
-    @sock.puts('init ' + @path.to_s())
     @sock.puts('config ' + @vffpath.to_s())
-    @sock.puts('go')
   end
 
   def change_config(vffpath)

@@ -18,10 +18,8 @@ namespace VimFastFind {
 
         public List<string> Paths { get { return _paths; } }
 
-        public List<MatchRule> Rules { get; set; }
-
         public bool IsFileOk(string name, bool onlyexclude=false) {
-            foreach (var mr in Rules) {
+            foreach (var mr in this.Config.Rules) {
                 if (!onlyexclude && mr.Include) {
                     if (mr.Match(name))
                         return true;
@@ -38,14 +36,13 @@ namespace VimFastFind {
             return fullpath.Substring(_dir.Length+1);
         }
 
-        public string InitDir { get; private set; }
-
-        public Matcher(string initdir) {
-            this.InitDir = initdir;
+        public DirConfig Config { get; private set; }
+        public Matcher(DirConfig config) {
+            this.Config = config;
         }
 
         public void Go(List<string> paths) {
-            _dir = this.InitDir;
+            _dir = this.Config.ScanDir;
             _dir = _dir.Trim();
             while (_dir.Length > 0 && _dir[_dir.Length-1] == Path.DirectorySeparatorChar)
                 _dir = _dir.Substring(0, _dir.Length-1);
@@ -61,6 +58,7 @@ namespace VimFastFind {
                 _paths = paths;
             } else {
                 System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+                Logger.Trace("starting initial scan of {0}", this.Config.ScanDir);
                 sw.Start();
                 foreach (DirectoryEntry entry in FastDirectoryScanner.RecursiveScan(_dir, skipdir => !IsFileOk(TrimPath(skipdir), true))) {
                     if (entry.IsFile) {
@@ -69,7 +67,7 @@ namespace VimFastFind {
                     }
                 }
                 sw.Stop();
-                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.InitDir);
+                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config.ScanDir);
             }
             OnPathsInited();
         }
@@ -81,7 +79,7 @@ namespace VimFastFind {
                 dirpath += Path.DirectorySeparatorChar;
 
             if (!Directory.Exists(fulldirpath)) {
-                Logger.Trace("subdir removed: {0}", dirpath);
+                // Logger.Trace("subdir removed: {0}", dirpath);
                 lock (_paths) {
                     int i = 0;
                     while (i < _paths.Count) {
@@ -93,10 +91,8 @@ namespace VimFastFind {
                     }
                 }
             } else {
-                Logger.Trace("subdir changed: {0}", dirpath);
-
+                // Logger.Trace("subdir changed: {0}", dirpath);
                 HashSet<string> filesindir = new HashSet<string>(Directory.GetFiles(fulldirpath).Where(x => IsFileOk(x)).Select(x => TrimPath(x)));
-
                 lock (_paths) {
                     int i = 0;
                     while (i < _paths.Count) {
@@ -126,8 +122,7 @@ namespace VimFastFind {
         {
             if (!IsFileOk(fullpath)) return;
 
-            Logger.Trace("filechnaged: {0}", fullpath);
-
+            // Logger.Trace("filechnaged: {0}", fullpath);
             if (File.Exists(fullpath)) {
                 lock (_paths) {
                     string f = TrimPath(fullpath);
@@ -199,7 +194,7 @@ namespace VimFastFind {
                 mre.WaitOne();
             }
 
-            Logger.Trace("{0}ms elapsed", sw.ElapsedMilliseconds);
+            // Logger.Trace("{0}ms elapsed", sw.ElapsedMilliseconds);
             return matches;
         }
 
@@ -227,7 +222,7 @@ namespace VimFastFind {
         Logger _logger = new Logger("pathmatch");
         protected override Logger Logger { get { return _logger; } }
 
-        public PathMatcher(string dir) : base(dir) { }
+        public PathMatcher(DirConfig config) : base(config) { }
         protected override void OnPathsInited() {
             _paths.Sort();
         }
@@ -280,8 +275,7 @@ namespace VimFastFind {
             (new Thread(ev_read) { IsBackground = true }).Start();
         }
 
-        public GrepMatcher(string dir) : base(dir) {
-        }
+        public GrepMatcher(DirConfig config) : base(config) { }
 
         static void ev_read() {
             while (true) {
@@ -321,24 +315,24 @@ namespace VimFastFind {
 
         protected override void OnPathsInited() {
             foreach (string f in _paths) {
-                Logger.Trace("adding to incoming file {0}", Path.Combine(this._dir, f));
+                // Logger.Trace("adding to incoming file {0}", Path.Combine(this._dir, f));
                 __incomingfiles.Enqueue(new KeyValuePair<GrepMatcher, string>(this, f));
             }
             __queuetrigger.Set();
         }
         protected override void OnPathAdded(string path) {
-            Logger.Trace("adding to incoming file {0}", Path.Combine(this._dir, path));
+            // Logger.Trace("adding to incoming file {0}", Path.Combine(this._dir, path));
             __incomingfiles.Enqueue(new KeyValuePair<GrepMatcher, string>(this, path));
             __queuetrigger.Set();
         }
         protected override void OnPathRemoved(string path) {
-            Logger.Trace("removing file {0}", Path.Combine(this._dir, path));
+            // Logger.Trace("removing file {0}", Path.Combine(this._dir, path));
             lock (_contents) {
                 _contents.Remove(path);
             }
         }
         protected override void OnPathChanged(string path) {
-            Logger.Trace("changed file {0}", Path.Combine(this._dir, path));
+            // Logger.Trace("changed file {0}", Path.Combine(this._dir, path));
             __incomingfiles.Enqueue(new KeyValuePair<GrepMatcher, string>(this, path));
             __queuetrigger.Set();
         }
@@ -351,7 +345,7 @@ namespace VimFastFind {
             }
         }
         protected override bool DoMatch(string path, string needle, out int score, ref object obj, List<string> outs) {
-            Logger.Trace("matching {0} against {1}", path, needle);
+            // Logger.Trace("matching {0} against {1}", path, needle);
             string contents;
             lock (_contents) {
                 if (!_contents.TryGetValue(path, out contents)) {

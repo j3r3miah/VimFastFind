@@ -5,9 +5,9 @@ using System.Text.RegularExpressions;
 
 namespace VimFastFind {
     public class ConfigParser {
-        Logger _logger = new Logger("config");
+        Logger _logger = new Logger("config", true);
 
-        public List<MatchRule> LoadRules(string configPath) {
+        public DirConfig LoadConfig(string configPath) {
             _logger.Trace("Loading config file: {0}", configPath);
 
             var rules = new List<MatchRule>();
@@ -26,7 +26,64 @@ namespace VimFastFind {
                     rules.Add(rule);
                 }
             }
-            return rules;
+            return new DirConfig(Path.GetDirectoryName(configPath), rules);
+        }
+    }
+
+    public class DirConfig {
+        public string ScanDir { get; private set;  }
+        public List<MatchRule> Rules { get; private set; }
+
+        public DirConfig(string scanDir, List<MatchRule> rules) {
+            ScanDir = scanDir;
+            Rules = rules;
+        }
+
+        public override int GetHashCode() {
+            int res = 0x1AB43C32;
+            res = res * 31 + ScanDir.GetHashCode();
+            foreach (var rule in Rules)
+                res = res * 31 + (rule == null ? 0 : rule.GetHashCode());
+            return res;
+        }
+
+        public override bool Equals(object obj) {
+            var o = obj as DirConfig;
+            if (o == null) return false;
+            if (ScanDir != o.ScanDir) return false;
+            if (Rules.Count != o.Rules.Count) return false;
+            for (int i = 0; i < Rules.Count; i++) {
+                if (Rules[i].Equals(o.Rules[i])) continue;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    public class MatchRuleList : List<MatchRule> {
+        private string _configPath;
+        public MatchRuleList(string configPath) {
+            _configPath = configPath;
+        }
+
+        public override bool Equals(object obj) {
+            var o = obj as MatchRuleList;
+            if (o == null) return false;
+            if (_configPath != o._configPath) return false;
+            if (Count != o.Count) return false;
+            for (int i = 0; i < Count; i++) {
+                if (this[i].Equals(o[i])) continue;
+                return false;
+            }
+            return true;
+        }
+
+        public override int GetHashCode() {
+            int res = 0x1AB43C32;
+            res = res * 31 + _configPath.GetHashCode();
+            foreach (var item in this)
+                res = res * 31 + (item == null ? 0 : item.GetHashCode());
+            return res;
         }
     }
 
@@ -39,7 +96,7 @@ namespace VimFastFind {
         public MatchRule(bool include, string v) {
             this.Include = include;
 
-            if (v[0]          == '*') this.Ends   = true;
+            if (v[0] == '*') this.Ends = true;
             if (v[v.Length-1] == '*') this.Starts = true;
 
             if (v == "*")
@@ -67,6 +124,24 @@ namespace VimFastFind {
                                  Ends ? "*" : "",
                                  Value,
                                  Starts ? "*" : "");
+        }
+
+        public override bool Equals(object obj) {
+            var o = obj as MatchRule;
+            if (o == null) return false;
+            return Include == o.Include
+                && Starts == o.Starts
+                && Ends == o.Ends
+                && Value == o.Value;
+        }
+
+        public override int GetHashCode() {
+            int res = 0x3D7EF6AB;
+            res = res * 31 + Include.GetHashCode();
+            res = res * 31 + Starts.GetHashCode();
+            res = res * 31 + Ends.GetHashCode();
+            res = res * 31 + Value.GetHashCode();
+            return res;
         }
     }
 }

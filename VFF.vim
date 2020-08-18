@@ -10,7 +10,11 @@ if !exists("g:vffGrepActKeySeq")
 endif
 
 if !exists("g:vffSearchActKeySeq")
-    let vffSearchActKeySeq = '<C-S>'
+  let vffSearchActKeySeq = '<C-S>'
+endif
+
+if !exists("g:vffChooseConfigKeySeq")
+  let vffChooseConfigKeySeq = '<C-Q>'
 endif
 
 " The name of the browser. The default is "/---Select File---", but you can
@@ -58,6 +62,7 @@ function! VffSetupActivationKey ()
   exec 'vnoremap ' . g:vffGrepActKeySeq . ' :call VffListBufs ("grep")<CR>'
   exec 'nnoremap ' . g:vffSearchActKeySeq . ' :call VffSearch ("normal")<CR>'
   exec 'vnoremap ' . g:vffSearchActKeySeq . ' :call VffSearch ("visual")<CR>'
+  exec 'nnoremap ' . g:vffChooseConfigKeySeq . ' :call VffChooseConfig()<CR>'
 endfunction
 
 function! VffSetupDeActivationKey ()
@@ -390,4 +395,12 @@ function! VffQuit ()
   let l:myBufNr = bufnr ("%")
   silent! exec "bd " . l:myBufNr
   call VffUnsetupSelect()
+endfunction
+
+function! VffChooseConfig ()
+  call fzf#run({'source': 'ls .vff*', 'options': '--multi', 'sink': function("VffChangeConfig")})
+endfunction
+
+function! VffChangeConfig (configPath)
+  exec "ruby $vff.change_config('" . getcwd() . "/" . a:configPath . "')"
 endfunction

@@ -12,8 +12,8 @@ using System.Threading;
 
 namespace VimFastFind {
     class Client {
-        static Dictionary<string, PathMatcher> __pathmatchercache = new Dictionary<string, PathMatcher>();
-        static Dictionary<string, GrepMatcher> __grepmatchercache = new Dictionary<string, GrepMatcher>();
+        static Dictionary<DirConfig, PathMatcher> __pathmatchercache = new Dictionary<DirConfig, PathMatcher>();
+        static Dictionary<DirConfig, GrepMatcher> __grepmatchercache = new Dictionary<DirConfig, GrepMatcher>();
 
         Logger _logger = new Logger("server");
 
@@ -39,41 +39,51 @@ namespace VimFastFind {
                             while (true) {
                                 string line = rdr.ReadLine();
                                 if (line == null) return;
-                                _logger.Trace("got cmd {0}", line);
+                                // _logger.Trace("got cmd {0}", line);
 
                                 line = Regex.Replace(line, @"^\s*#.*", "");
                                 if (String.IsNullOrWhiteSpace(line)) continue;
                                 string[] s = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
+                                if (s[0] == "config") {
+                                    var config = new ConfigParser().LoadConfig(s[1]);
 
-                                if (s[0] == "init") {
-                                    s = line.Split(new char[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
                                     lock (__pathmatchercache) {
-                                        if (!__pathmatchercache.TryGetValue(s[1], out _pathmatcher)) {
-                                            __pathmatchercache[s[1]] = _pathmatcher = new PathMatcher(s[1]);
+                                        if (_ownspath) {
+                                            if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.Config);
+                                            _pathmatcher = null;
+                                        }
+                                        if (!__pathmatchercache.TryGetValue(config, out _pathmatcher)) {
+                                            _logger.Trace("created pathmatcher: " + config.ScanDir);
+                                            __pathmatchercache[config] = _pathmatcher = new PathMatcher(config);
                                             _ownspath = true;
                                         } else {
+                                            _logger.Trace("pathmatcher cache hit: " + config.ScanDir);
                                             _pathmatcher.Ref();
+                                            _ownspath = false;
                                         }
+                                        _logger.Trace("__pathmatchercache size: " + __pathmatchercache.Count);
                                     }
 
                                     lock (__grepmatchercache) {
-                                        if (!__grepmatchercache.TryGetValue(s[1], out _grepmatcher)) {
-                                            __grepmatchercache[s[1]] = _grepmatcher = new GrepMatcher(s[1]);
+                                        if (_ownsgrep) {
+                                            if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.Config);
+                                            _grepmatcher = null;
+                                        }
+                                        if (!__grepmatchercache.TryGetValue(config, out _grepmatcher)) {
+                                            _logger.Trace("created grepmatcher: " + config.ScanDir);
+                                            __grepmatchercache[config] = _grepmatcher = new GrepMatcher(config);
                                             _ownsgrep = true;
                                         } else {
+                                            _logger.Trace("grepmatcher cache hit: " + config.ScanDir);
                                             _grepmatcher.Ref();
+                                            _ownsgrep = false;
                                         }
+                                        _logger.Trace("__grepmatchercache size: " + __grepmatchercache.Count);
                                     }
 
-                                } else if (s[0] == "go") {
                                     if (_ownspath) _pathmatcher.Go(null);
                                     if (_ownsgrep) _grepmatcher.Go(_pathmatcher.Paths);
-
-                                } else if (s[0] == "config") {
-                                    var rules = new ConfigParser().LoadRules(s[1]);
-                                    if (_ownspath) _pathmatcher.Rules = rules;
-                                    if (_ownsgrep) _grepmatcher.Rules = rules;
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
@@ -107,7 +117,8 @@ namespace VimFastFind {
                                     return;
                                 } else {
                                 }
-                                _logger.Trace("done cmd {0}", line);
+
+                                // _logger.Trace("done cmd {0}", line);
                                 wtr.Flush();
                             }
                         }
@@ -122,13 +133,13 @@ namespace VimFastFind {
                 }
                 lock (__pathmatchercache) {
                     if (_pathmatcher != null) {
-                        if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.InitDir);
+                        if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.Config);
                         _pathmatcher = null;
                     }
                 }
                 lock (__grepmatchercache) {
                     if (_grepmatcher != null) {
-                        if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.InitDir);
+                        if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.Config);
                         _grepmatcher = null;
                     }
                 }
