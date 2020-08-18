@@ -47,12 +47,8 @@ namespace VimFastFind
 
         public bool IsDisposed { get; private set;  }
 
-        public RefCountedObject() {
-            _ttl = null;
-        }
-
         // freed object will be preserved for this long before disposing
-        public RefCountedObject(TimeSpan ghostTTL) {
+        public RefCountedObject(TimeSpan? ghostTTL) {
             _ttl = ghostTTL;
         }
 
@@ -94,7 +90,7 @@ namespace VimFastFind
 
         public DirConfig Config { get; private set; }
 
-        public Matcher(DirConfig config, TimeSpan ghostTTL) : base(ghostTTL) {
+        public Matcher(DirConfig config, TimeSpan? ghostTTL) : base(ghostTTL) {
             this.Config = config;
         }
 
@@ -281,6 +277,7 @@ namespace VimFastFind
                 try { _fswatcher.Dispose(); } catch { }
                 _fswatcher = null;
             }
+            _paths = null;
             base.Dispose();
         }
     }
@@ -289,7 +286,7 @@ namespace VimFastFind
         Logger _logger = new Logger("pathmatch");
         protected override Logger Logger { get { return _logger; } }
 
-        public PathMatcher(DirConfig config, TimeSpan ghostTTL) : base(config, ghostTTL) { }
+        public PathMatcher(DirConfig config, TimeSpan? ghostTTL) : base(config, ghostTTL) { }
         protected override void OnPathsInited() {
             _paths.Sort();
         }
@@ -346,7 +343,7 @@ namespace VimFastFind
             (new Thread(ev_read) { IsBackground = true }).Start();
         }
 
-        public GrepMatcher(DirConfig config, TimeSpan ghostTTL) : base(config, ghostTTL) { }
+        public GrepMatcher(DirConfig config, TimeSpan? ghostTTL) : base(config, ghostTTL) { }
 
         static void ev_read() {
             while (true) {
@@ -452,6 +449,7 @@ namespace VimFastFind
         }
 
         public override void Dispose() {
+            _contents = null;
             base.Dispose();
             dead = true;
         }

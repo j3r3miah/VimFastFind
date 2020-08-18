@@ -13,7 +13,8 @@ using System.Threading;
 namespace VimFastFind
 {
     class Client {
-        static readonly TimeSpan MATCHER_TTL = TimeSpan.FromMinutes(10);
+        // static readonly TimeSpan? MATCHER_TTL = TimeSpan.FromMinutes(10);
+        static readonly TimeSpan? MATCHER_TTL = null;
 
         static Dictionary<DirConfig, PathMatcher> __pathmatchercache = new Dictionary<DirConfig, PathMatcher>();
         static Dictionary<DirConfig, GrepMatcher> __grepmatchercache = new Dictionary<DirConfig, GrepMatcher>();
