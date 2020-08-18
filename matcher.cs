@@ -9,12 +9,94 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
+using System.Timers;
 
-namespace VimFastFind {
-    public abstract class Matcher : IDisposable {
+namespace VimFastFind
+{
+    public class RefCountedObject : IDisposable {
+        static System.Timers.Timer __ghostTimer = new System.Timers.Timer(1000);
+        static List<RefCountedObject> __ghostCache = new List<RefCountedObject>();
+
+        static RefCountedObject() {
+            __ghostTimer.Elapsed += __FreeGhosts;
+            __ghostTimer.AutoReset = true;
+        }
+
+        static void __FreeGhosts(Object source, ElapsedEventArgs e) {
+            lock (__ghostCache) {
+                var now = DateTime.Now;
+                for (int i = 0; i < __ghostCache.Count; i++) {
+                    if (__ghostCache[i]._refCount > 0) {
+                        __ghostCache.RemoveAt(i);
+                        i--;
+                    }
+                    else if (__ghostCache[i]._freeTime < now) {
+                        __ghostCache[i].Dispose();
+                        __ghostCache.RemoveAt(i);
+                        i--;
+                    }
+                }
+                if (__ghostCache.Count == 0)
+                    __ghostTimer.Enabled = false;
+            }
+        }
+
+        int _refCount = 1;
+        TimeSpan? _ttl;
+        DateTime? _freeTime;
+
+        public bool IsDisposed { get; private set;  }
+
+        public RefCountedObject() {
+            _ttl = null;
+        }
+
+        // freed object will be preserved for this long before disposing
+        public RefCountedObject(TimeSpan ghostTTL) {
+            _ttl = ghostTTL;
+        }
+
+        public void Ref() {
+            Interlocked.Increment(ref _refCount);
+        }
+
+        public bool Free() {
+            if (Interlocked.Decrement(ref _refCount) == 0) {
+                return _MaybeDispose();
+            }
+            return false;
+        }
+
+        private bool _MaybeDispose() {
+            if (_ttl == null) {
+                Dispose();
+                return true;
+            }
+            else {
+                _freeTime = DateTime.Now + _ttl;
+                lock (__ghostCache) {
+                    __ghostCache.Add(this);
+                    __ghostTimer.Enabled = true;
+                }
+                return false;
+            }
+        }
+
+        public virtual void Dispose() {
+            IsDisposed = true;
+        }
+    }
+
+    public abstract class Matcher : RefCountedObject {
         protected string _dir;
         protected List<string> _paths = new List<string>();
         DirectoryWatcher _fswatcher;
+
+        public DirConfig Config { get; private set; }
+
+        public Matcher(DirConfig config, TimeSpan ghostTTL) : base(ghostTTL) {
+            this.Config = config;
+        }
 
         public List<string> Paths { get { return _paths; } }
 
@@ -34,11 +116,6 @@ namespace VimFastFind {
         public string TrimPath(string fullpath) {
             if (_dir == fullpath) return "";
             return fullpath.Substring(_dir.Length+1);
-        }
-
-        public DirConfig Config { get; private set; }
-        public Matcher(DirConfig config) {
-            this.Config = config;
         }
 
         public void Go(List<string> paths) {
@@ -198,23 +275,13 @@ namespace VimFastFind {
             return matches;
         }
 
-        public virtual void Dispose() {
+        public override void Dispose() {
+            Logger.Trace("disposing " + Config.ConfigPath);
             if (_fswatcher != null) {
                 try { _fswatcher.Dispose(); } catch { }
                 _fswatcher = null;
             }
-        }
-
-        int _refcnt = 1;
-        public void Ref() {
-            Interlocked.Increment(ref _refcnt);
-        }
-        public bool Free() {
-            if (Interlocked.Decrement(ref _refcnt) == 0) {
-                Dispose();
-                return true;
-            }
-            return false;
+            base.Dispose();
         }
     }
 
@@ -222,7 +289,7 @@ namespace VimFastFind {
         Logger _logger = new Logger("pathmatch");
         protected override Logger Logger { get { return _logger; } }
 
-        public PathMatcher(DirConfig config) : base(config) { }
+        public PathMatcher(DirConfig config, TimeSpan ghostTTL) : base(config, ghostTTL) { }
         protected override void OnPathsInited() {
             _paths.Sort();
         }
@@ -258,6 +325,10 @@ namespace VimFastFind {
 
             return false;
         }
+
+        public override void Dispose() {
+            base.Dispose();
+        }
     }
 
     public class GrepMatcher : Matcher {
@@ -275,7 +346,7 @@ namespace VimFastFind {
             (new Thread(ev_read) { IsBackground = true }).Start();
         }
 
-        public GrepMatcher(DirConfig config) : base(config) { }
+        public GrepMatcher(DirConfig config, TimeSpan ghostTTL) : base(config, ghostTTL) { }
 
         static void ev_read() {
             while (true) {
@@ -381,7 +452,6 @@ namespace VimFastFind {
         }
 
         public override void Dispose() {
-            Logger.Trace("disposing grep");
             base.Dispose();
             dead = true;
         }

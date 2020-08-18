@@ -10,23 +10,29 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
 
-namespace VimFastFind {
+namespace VimFastFind
+{
     class Client {
+        static readonly TimeSpan MATCHER_TTL = TimeSpan.FromMinutes(10);
+
         static Dictionary<DirConfig, PathMatcher> __pathmatchercache = new Dictionary<DirConfig, PathMatcher>();
         static Dictionary<DirConfig, GrepMatcher> __grepmatchercache = new Dictionary<DirConfig, GrepMatcher>();
 
-        Logger _logger = new Logger("server");
+        static Logger _logger = new Logger("server");
 
         PathMatcher _pathmatcher;
         GrepMatcher _grepmatcher;
-        bool _ownspath;
-        bool _ownsgrep;
 
         TcpClient _client;
 
         public Client(TcpClient client) {
             _client = client;
             (new Thread(ev_client) { IsBackground = true }).Start();
+        }
+
+        static PathMatcher __GetOrCreatePathMatcher(DirConfig config) {
+            PathMatcher ret = null;
+            return ret;
         }
 
         void ev_client() {
@@ -48,42 +54,55 @@ namespace VimFastFind {
                                 if (s[0] == "config") {
                                     var config = new ConfigParser().LoadConfig(s[1]);
 
+                                    // free old path matcher, if there is one
+                                    if (_pathmatcher != null) {
+                                        _pathmatcher.Free();
+                                        _pathmatcher = null;
+                                    }
+                                    // get or create path matcher for new config
                                     lock (__pathmatchercache) {
-                                        if (_ownspath) {
-                                            if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.Config);
-                                            _pathmatcher = null;
+                                        if (__pathmatchercache.TryGetValue(config, out _pathmatcher)) {
+                                            if (_pathmatcher.IsDisposed) {
+                                                _logger.Trace("pathmatcher cache disposed: " + config);
+                                                __pathmatchercache.Remove(config);
+                                                _pathmatcher = null;
+                                            } else {
+                                                _logger.Trace("pathmatcher cache hit: " + config);
+                                                _pathmatcher.Ref();
+                                            }
                                         }
-                                        if (!__pathmatchercache.TryGetValue(config, out _pathmatcher)) {
-                                            _logger.Trace("created pathmatcher: " + config.ScanDir);
-                                            __pathmatchercache[config] = _pathmatcher = new PathMatcher(config);
-                                            _ownspath = true;
-                                        } else {
-                                            _logger.Trace("pathmatcher cache hit: " + config.ScanDir);
-                                            _pathmatcher.Ref();
-                                            _ownspath = false;
+                                        if (_pathmatcher == null) {
+                                            __pathmatchercache[config] = _pathmatcher = new PathMatcher(config, MATCHER_TTL);
+                                            _logger.Trace("created pathmatcher: " + config);
+                                            _pathmatcher.Go(null);
                                         }
                                         _logger.Trace("__pathmatchercache size: " + __pathmatchercache.Count);
+                                        _logger.Trace("keys = " + string.Join("\n                ", __pathmatchercache.Keys));
                                     }
 
+                                    // free old grep matcher, if there is one
+                                    if (_grepmatcher != null) {
+                                        _grepmatcher.Free();
+                                        _grepmatcher = null;
+                                    }
+                                    // get or create grep matcher for new config
                                     lock (__grepmatchercache) {
-                                        if (_ownsgrep) {
-                                            if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.Config);
-                                            _grepmatcher = null;
+                                        if (__grepmatchercache.TryGetValue(config, out _grepmatcher)) {
+                                            if (_grepmatcher.IsDisposed) {
+                                                __grepmatchercache.Remove(config);
+                                                _grepmatcher = null;
+                                            } else {
+                                                // _logger.Trace("grepmatcher cache hit: " + config);
+                                                _grepmatcher.Ref();
+                                            }
                                         }
-                                        if (!__grepmatchercache.TryGetValue(config, out _grepmatcher)) {
-                                            _logger.Trace("created grepmatcher: " + config.ScanDir);
-                                            __grepmatchercache[config] = _grepmatcher = new GrepMatcher(config);
-                                            _ownsgrep = true;
-                                        } else {
-                                            _logger.Trace("grepmatcher cache hit: " + config.ScanDir);
-                                            _grepmatcher.Ref();
-                                            _ownsgrep = false;
+                                        if (_grepmatcher == null) {
+                                            __grepmatchercache[config] = _grepmatcher = new GrepMatcher(config, MATCHER_TTL);
+                                            // _logger.Trace("created grepmatcher: " + config);
+                                            _grepmatcher.Go(_pathmatcher.Paths);
                                         }
-                                        _logger.Trace("__grepmatchercache size: " + __grepmatchercache.Count);
+                                        // _logger.Trace("__grepmatchercache size: " + __grepmatchercache.Count);
                                     }
-
-                                    if (_ownspath) _pathmatcher.Go(null);
-                                    if (_ownsgrep) _grepmatcher.Go(_pathmatcher.Paths);
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
