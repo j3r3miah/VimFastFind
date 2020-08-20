@@ -58,11 +58,11 @@ namespace VimFastFind {
                                     }
                                     lock (__pathmatchercache) {
                                         if (!__pathmatchercache.TryGetValue(config, out _pathmatcher)) {
-                                            _logger.Trace("created pathmatcher: " + config.ScanDir);
+                                            _logger.Trace("created pathmatcher: " + config.ScanDirectory);
                                             __pathmatchercache[config] = _pathmatcher = new PathMatcher(config);
                                             ownMatchers = true;
                                         } else {
-                                            _logger.Trace("pathmatcher cache hit: " + config.ScanDir);
+                                            _logger.Trace("pathmatcher cache hit: " + config.ScanDirectory);
                                             _pathmatcher.Ref();
                                         }
                                         _logger.Trace("__pathmatchercache size: " + __pathmatchercache.Count);
@@ -74,10 +74,10 @@ namespace VimFastFind {
                                     }
                                     lock (__grepmatchercache) {
                                         if (!__grepmatchercache.TryGetValue(config, out _grepmatcher)) {
-                                            _logger.Trace("created grepmatcher: " + config.ScanDir);
+                                            _logger.Trace("created grepmatcher: " + config.ScanDirectory);
                                             __grepmatchercache[config] = _grepmatcher = new GrepMatcher(config);
                                         } else {
-                                            _logger.Trace("grepmatcher cache hit: " + config.ScanDir);
+                                            _logger.Trace("grepmatcher cache hit: " + config.ScanDirectory);
                                             _grepmatcher.Ref();
                                         }
                                         _logger.Trace("__grepmatchercache size: " + __grepmatchercache.Count);
@@ -164,7 +164,6 @@ namespace VimFastFind {
         }
 
         public static void Main(string[] args) {
-            ThreadPool.QueueUserWorkItem(delegate { });
             if (args.Length != 0) {
                 if (args[0].StartsWith("-port=")) {
                     Port = Convert.ToInt32(args[0].Substring(6));

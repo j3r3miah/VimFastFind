@@ -1,22 +1,30 @@
 #!/bin/sh
 
-if [ "$1" == "release" ]; then
-    BUILD_DIR="build/release"
+BUILD_ROOT="bin"
+
+if [ "$1" == "clean" ]; then
+    rm -fr $BUILD_ROOT
+    exit 0
+elif [ "$1" == "release" ]; then
+    BUILD_DIR="${BUILD_ROOT}/release"
     FLAGS="-debug:pdbonly /optimize -d:NDEBUG"
 else
-    BUILD_DIR="build/debug"
+    BUILD_DIR="${BUILD_ROOT}/debug"
     FLAGS="/debug -d:TRACE -d:DEBUG"
 fi
 
-mkdir -p $BUILD_DIR/
-
-cp -p ./MonoMac.dll $BUILD_DIR/
+mkdir -p $BUILD_DIR
+find lib -name '*.dll' -exec cp -p {} $BUILD_DIR \;
 
 mcs -platform:x64 -noconfig -d:MONO /nologo /out:$BUILD_DIR/VFFServer.exe \
     /target:exe /unsafe /warn:4 \
     $FLAGS \
     -d:PLATFORM_OSX -d:HAVE_MONO_POSIX -d:SYSTEM_OSX -d:ARCH_X64 -d:SYSTEM_MACOSX -d:PLATFORM_MACOSX \
-    /r:System.dll /r:System.Core.dll /r:Mono.Posix.dll /r:./MonoMac.dll \
+    /r:System.dll /r:System.Core.dll /r:Mono.Posix.dll \
+    /r:$BUILD_DIR/MonoMac.dll \
+    /r:$BUILD_DIR/System.ComponentModel.Primitives.dll \
+    /r:$BUILD_DIR/System.ComponentModel.TypeConverter.dll \
+    /r:$BUILD_DIR/YamlDotNet.dll \
     ./server.cs \
     ./matcher.cs \
     ./config.cs \

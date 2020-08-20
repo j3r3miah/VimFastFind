@@ -5,7 +5,7 @@ namespace VimFastFind {
 #if DEBUG
     public class Logger {
         static Dictionary<string, bool> __enabled = new Dictionary<string, bool> {
-            ["config"] = false,
+            ["config"] = true,
             ["server"] = false,
             ["pathmatch"] = true,
             ["grepmatch"] = true,

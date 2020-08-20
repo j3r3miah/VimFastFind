@@ -2,13 +2,49 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Text;
+using YamlDotNet.Serialization;
+using YamlDotNet.Core;
 
-namespace VimFastFind {
+namespace VimFastFind
+{
+    public class ConfigYaml {
+        public string ScanDirectory;
+        public RulesYaml Rules;
+
+        public class RulesYaml {
+            public List<string> Include;
+            public List<string> Exclude;
+        }
+    }
+
     public class ConfigParser {
         Logger _logger = new Logger("config");
 
         public DirConfig LoadConfig(string configPath) {
-            _logger.Trace("Loading config file: {0}", configPath);
+            using (var sr = new StreamReader(configPath)) {
+                ConfigYaml config;
+                try {
+                    config = new Deserializer().Deserialize<ConfigYaml>(sr.ReadToEnd());
+                } catch (YamlException ex) {
+                    return LoadLegacyConfig(configPath);
+                }
+
+                _logger.Trace("Loading config file: {0}", configPath);
+                var rules = new List<MatchRule>();
+                foreach (string pattern in config.Rules.Include)
+                    rules.Add(new MatchRule(true, pattern));
+                foreach (string pattern in config.Rules.Exclude)
+                    rules.Add(new MatchRule(false, pattern));
+
+                var ret = new DirConfig(configPath, config.ScanDirectory, rules);
+                _logger.Trace(ret.ToString());
+                return ret;
+            }
+        }
+
+        public DirConfig LoadLegacyConfig(string configPath) {
+            _logger.Trace("Loading legacy config file: {0}", configPath);
 
             var rules = new List<MatchRule>();
             using (var sr = new StreamReader(configPath)) {
@@ -21,30 +57,30 @@ namespace VimFastFind {
                     if (s[0] != "include" && s[0] != "exclude")
                         throw new Exception("Invalid config line: " + line);
 
-                    var rule = new MatchRule(s[0] == "include", s[1]);
-                    _logger.Trace("  " + rule.ToString());
-                    rules.Add(rule);
+                    rules.Add(new MatchRule(s[0] == "include", s[1]));
                 }
             }
-            return new DirConfig(configPath, Path.GetDirectoryName(configPath), rules);
 
+            var ret = new DirConfig(configPath, Path.GetDirectoryName(configPath), rules);
+            _logger.Trace(ret.ToString());
+            return ret;
         }
     }
 
     public class DirConfig {
         public string ConfigPath { get; private set; }
-        public string ScanDir { get; private set;  }
+        public string ScanDirectory { get; private set;  }
         public List<MatchRule> Rules { get; private set; }
 
         public DirConfig(string configPath, string scanDir, List<MatchRule> rules) {
             ConfigPath = configPath;
-            ScanDir = scanDir;
+            ScanDirectory = scanDir;
             Rules = rules;
         }
 
         public override int GetHashCode() {
             int res = 0x1AB43C32;
-            res = res * 31 + ScanDir.GetHashCode();
+            res = res * 31 + ScanDirectory.GetHashCode();
             foreach (var rule in Rules)
                 res = res * 31 + (rule == null ? 0 : rule.GetHashCode());
             return res;
@@ -53,7 +89,7 @@ namespace VimFastFind {
         public override bool Equals(object obj) {
             var o = obj as DirConfig;
             if (o == null) return false;
-            if (ScanDir != o.ScanDir) return false;
+            if (ScanDirectory != o.ScanDirectory) return false;
             if (Rules.Count != o.Rules.Count) return false;
             for (int i = 0; i < Rules.Count; i++) {
                 if (Rules[i].Equals(o.Rules[i])) continue;
@@ -63,7 +99,15 @@ namespace VimFastFind {
         }
 
         public override string ToString() {
-            return ConfigPath;
+            var sb = new StringBuilder();
+            sb.AppendLine($"<DirConfig>");
+            sb.AppendLine($"  ConfigPath: {ConfigPath}");
+            sb.AppendLine($"  ScanDirectory: {ScanDirectory}");
+            sb.AppendLine($"  Rules:");
+            foreach (var rule in Rules)
+                sb.AppendLine($"    {rule}");
+            sb.Length--;
+            return sb.ToString();
         }
     }
 

@@ -10,7 +10,8 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
 
-namespace VimFastFind {
+namespace VimFastFind
+{
     public abstract class Matcher : IDisposable {
         protected string _dir;
         protected List<string> _paths = new List<string>();
@@ -42,7 +43,7 @@ namespace VimFastFind {
         }
 
         public void Go(List<string> paths) {
-            _dir = this.Config.ScanDir;
+            _dir = this.Config.ScanDirectory;
             _dir = _dir.Trim();
             while (_dir.Length > 0 && _dir[_dir.Length-1] == Path.DirectorySeparatorChar)
                 _dir = _dir.Substring(0, _dir.Length-1);
@@ -55,10 +56,10 @@ namespace VimFastFind {
             if (paths != null) {
                 // grepmatcher does this
                 _paths = paths;
-                Logger.Trace("starting initial load of {0}", this.Config.ScanDir);
+                Logger.Trace("starting initial load of {0}", this.Config.ScanDirectory);
             } else {
                 // pathmatcher does this
-                Logger.Trace("starting initial scan of {0}", this.Config.ScanDir);
+                Logger.Trace("starting initial scan of {0}", this.Config.ScanDirectory);
                 var sw = new System.Diagnostics.Stopwatch();
                 sw.Start();
                 foreach (DirectoryEntry entry in FastDirectoryScanner.RecursiveScan(_dir, skipdir => !IsFileOk(TrimPath(skipdir), true))) {
@@ -68,7 +69,7 @@ namespace VimFastFind {
                     }
                 }
                 sw.Stop();
-                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config);
+                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config.ScanDirectory);
             }
             OnPathsInited();
         }
