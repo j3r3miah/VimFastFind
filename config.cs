@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace VimFastFind {
     public class ConfigParser {
-        Logger _logger = new Logger("config", true);
+        Logger _logger = new Logger("config");
 
         public DirConfig LoadConfig(string configPath) {
             _logger.Trace("Loading config file: {0}", configPath);
@@ -26,15 +26,18 @@ namespace VimFastFind {
                     rules.Add(rule);
                 }
             }
-            return new DirConfig(Path.GetDirectoryName(configPath), rules);
+            return new DirConfig(configPath, Path.GetDirectoryName(configPath), rules);
+
         }
     }
 
     public class DirConfig {
+        public string ConfigPath { get; private set; }
         public string ScanDir { get; private set;  }
         public List<MatchRule> Rules { get; private set; }
 
-        public DirConfig(string scanDir, List<MatchRule> rules) {
+        public DirConfig(string configPath, string scanDir, List<MatchRule> rules) {
+            ConfigPath = configPath;
             ScanDir = scanDir;
             Rules = rules;
         }
@@ -58,32 +61,9 @@ namespace VimFastFind {
             }
             return true;
         }
-    }
 
-    public class MatchRuleList : List<MatchRule> {
-        private string _configPath;
-        public MatchRuleList(string configPath) {
-            _configPath = configPath;
-        }
-
-        public override bool Equals(object obj) {
-            var o = obj as MatchRuleList;
-            if (o == null) return false;
-            if (_configPath != o._configPath) return false;
-            if (Count != o.Count) return false;
-            for (int i = 0; i < Count; i++) {
-                if (this[i].Equals(o[i])) continue;
-                return false;
-            }
-            return true;
-        }
-
-        public override int GetHashCode() {
-            int res = 0x1AB43C32;
-            res = res * 31 + _configPath.GetHashCode();
-            foreach (var item in this)
-                res = res * 31 + (item == null ? 0 : item.GetHashCode());
-            return res;
+        public override string ToString() {
+            return ConfigPath;
         }
     }
 

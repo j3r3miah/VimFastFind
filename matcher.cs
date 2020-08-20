@@ -47,18 +47,19 @@ namespace VimFastFind {
             while (_dir.Length > 0 && _dir[_dir.Length-1] == Path.DirectorySeparatorChar)
                 _dir = _dir.Substring(0, _dir.Length-1);
 
-            Logger.Trace("watching {0}", _dir);
-
             _fswatcher = new DirectoryWatcher(_dir);
             _fswatcher.EnableWatchingContents = true;
             _fswatcher.Initialize();
             _fswatcher.SubdirectoryChanged += ev_SubdirChanged;
 
             if (paths != null) {
+                // grepmatcher does this
                 _paths = paths;
+                Logger.Trace("starting initial load of {0}", this.Config.ScanDir);
             } else {
-                System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+                // pathmatcher does this
                 Logger.Trace("starting initial scan of {0}", this.Config.ScanDir);
+                var sw = new System.Diagnostics.Stopwatch();
                 sw.Start();
                 foreach (DirectoryEntry entry in FastDirectoryScanner.RecursiveScan(_dir, skipdir => !IsFileOk(TrimPath(skipdir), true))) {
                     if (entry.IsFile) {
@@ -67,7 +68,7 @@ namespace VimFastFind {
                     }
                 }
                 sw.Stop();
-                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config.ScanDir);
+                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config);
             }
             OnPathsInited();
         }
@@ -258,6 +259,11 @@ namespace VimFastFind {
 
             return false;
         }
+
+        public override void Dispose() {
+            Logger.Trace("disposing " + Config.ConfigPath);
+            base.Dispose();
+        }
     }
 
     public class GrepMatcher : Matcher {
@@ -279,6 +285,10 @@ namespace VimFastFind {
 
         static void ev_read() {
             while (true) {
+                int count = 0;
+                var sw = new System.Diagnostics.Stopwatch();
+                sw.Start();
+
                 KeyValuePair<GrepMatcher, string> kvp;
                 while (__incomingfiles.Dequeue(out kvp)) {
                     if (kvp.Key.dead)
@@ -308,14 +318,18 @@ namespace VimFastFind {
                     } catch (Exception e) {
                         Console.WriteLine("exception opening {0} for grepping: {1} ", kvp.Value, e);
                     }
+                    count++;
                 }
+
+                sw.Stop();
+                if (count > 0) Logger.TraceFrom("grepmatch", "[{0}ms] {1} files loaded", sw.ElapsedMilliseconds, count);
                 __queuetrigger.WaitOne();
             }
         }
 
         protected override void OnPathsInited() {
             foreach (string f in _paths) {
-                // Logger.Trace("adding to incoming file {0}", Path.Combine(this._dir, f));
+                // Logger.Trace("Adding to incoming file {0}", Path.Combine(this._dir, f));
                 __incomingfiles.Enqueue(new KeyValuePair<GrepMatcher, string>(this, f));
             }
             __queuetrigger.Set();
@@ -349,7 +363,8 @@ namespace VimFastFind {
             string contents;
             lock (_contents) {
                 if (!_contents.TryGetValue(path, out contents)) {
-                    Logger.Trace("{0} not found", path);
+                    // when paths are scanned (in pathmatcher) but not loaded yet)
+                    // Logger.Trace("{0} not found", path);
                     score = 0;
                     return false;
                 }
@@ -381,7 +396,7 @@ namespace VimFastFind {
         }
 
         public override void Dispose() {
-            Logger.Trace("disposing grep");
+            Logger.Trace("disposing " + Config.ConfigPath);
             base.Dispose();
             dead = true;
         }

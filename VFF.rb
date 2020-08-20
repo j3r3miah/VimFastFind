@@ -68,6 +68,12 @@ class VFF
     end
   end
 
+  def change_config(vffpath)
+    @vffpath = vffpath
+    connect()
+    @sock.puts('config ' + vffpath)
+  end
+
   def connect()
     if (!@foundvff)
       return false
@@ -112,13 +118,6 @@ class VFF
   def connect2()
     @sock = TCPSocket.open("127.0.0.1", 20398)
     @sock.puts('config ' + @vffpath.to_s())
-  end
-
-  def change_config(vffpath)
-    @vffpath = vffpath
-    if !@sock.nil?
-      @sock.puts('config ' + vffpath)
-    end
   end
 
   def text_append(mode, s)
