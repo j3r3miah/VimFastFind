@@ -1,15 +1,26 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 
 namespace VimFastFind {
-#if DEBUG
     public class Logger {
+#if DEBUG
+        static StreamWriter __fw = null;
+
         static Dictionary<string, bool> __enabled = new Dictionary<string, bool> {
             ["config"] = true,
             ["server"] = false,
             ["pathmatch"] = true,
             ["grepmatch"] = true,
         };
+#else
+        static StreamWriter __fw = new StreamWriter(
+                Path.Combine(Path.GetTempPath(), "vff.log"));
+
+        static Dictionary<string, bool> __enabled = new Dictionary<string, bool> {
+            // all enabled
+        };
+#endif
 
         string _prefix;
         bool _doLogging;
@@ -20,35 +31,37 @@ namespace VimFastFind {
         }
 
         public void Trace(string fmt) {
-            if (_doLogging)
-                Console.WriteLine(_prefix + fmt);
+            if (!_doLogging) return;
+            __WriteLine(_prefix + fmt);
         }
 
         public void Trace(string fmt, params object[] args) {
-            if (_doLogging)
-                Console.WriteLine(_prefix + fmt, args);
+            if (!_doLogging) return;
+            __WriteLine(_prefix + fmt, args);
         }
 
         public static void TraceFrom(string name, string fmt) {
             if (!__enabled.ContainsKey(name) || __enabled[name]) {
                 var prefix = string.Format("[{0}] ", name);
-                Console.WriteLine(prefix + fmt);
+                __WriteLine(prefix + fmt);
             }
         }
 
         public static void TraceFrom(string name, string fmt, params object[] args) {
             if (!__enabled.ContainsKey(name) || __enabled[name]) {
                 var prefix = string.Format("[{0}] ", name);
-                Console.WriteLine(prefix + fmt, args);
+                __WriteLine(prefix + fmt, args);
             }
         }
+
+        static void __WriteLine(string cmd, params object[] args) {
+            if (__fw != null) {
+                __fw.WriteLine(String.Format(cmd, args));
+                __fw.Flush();
+            } else {
+                Console.WriteLine(cmd, args);
+            }
+        }
+
     }
-#else
-    public class Logger {
-        public Logger(string name) {}
-        public Logger(string name, bool doLogging) {}
-        public void Trace(string fmt, params object[] args) {}
-        public static void TraceFrom(string name, string fmt, params object[] args) {}
-    }
-#endif
 }
