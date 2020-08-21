@@ -12,21 +12,46 @@ using System.Threading;
 
 namespace VimFastFind {
     class Client {
-        // TODO hash of config :: pair(path + grep matcher)
-        static Dictionary<DirConfig, PathMatcher> __pathmatchercache = new Dictionary<DirConfig, PathMatcher>();
-        static Dictionary<DirConfig, GrepMatcher> __grepmatchercache = new Dictionary<DirConfig, GrepMatcher>();
+        static Dictionary<DirConfig, Matcher> __matchercache = new Dictionary<DirConfig, Matcher>();
 
         Logger _logger = new Logger("server");
 
-        DirConfig _config;
-        PathMatcher _pathmatcher;
-        GrepMatcher _grepmatcher;
-
         TcpClient _client;
+        DirConfig _config;
+        Matcher _matcher;
 
         public Client(TcpClient client) {
             _client = client;
             (new Thread(ev_client) { IsBackground = true }).Start();
+        }
+
+        void _UpdateConfig(DirConfig config) {
+            if (_config != null && _config.Equals(config)) return;
+            _config = config;
+
+            bool ownMatchers = false;
+
+            if (_matcher != null) {
+                if (_matcher.Free()) __matchercache.Remove(_matcher.Config);
+                _matcher = null;
+            }
+            lock (__matchercache) {
+                if (!__matchercache.TryGetValue(config, out _matcher)) {
+                    _logger.Trace("created matcher: " + config.ScanDirectory);
+                    __matchercache[config] = _matcher = new Matcher(config);
+                    ownMatchers = true;
+                } else {
+                    _logger.Trace("matcher cache hit: " + config.ScanDirectory);
+                    _matcher.Ref();
+                }
+                _logger.Trace("__matchercache size: " + __matchercache.Count);
+            }
+
+            if (ownMatchers) {
+                ThreadPool.QueueUserWorkItem(delegate {
+                    _matcher.Go();
+                });
+            }
         }
 
         void ev_client() {
@@ -46,56 +71,14 @@ namespace VimFastFind {
                                 string[] s = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
                                 if (s[0] == "config") {
-                                    var config = new ConfigParser().LoadConfig(s[1]);
-                                    if (_config != null && _config.Equals(config)) continue;
-                                    _config = config;
-
-                                    bool ownMatchers = false;
-
-                                    if (_pathmatcher != null) {
-                                        if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.Config);
-                                        _pathmatcher = null;
-                                    }
-                                    lock (__pathmatchercache) {
-                                        if (!__pathmatchercache.TryGetValue(config, out _pathmatcher)) {
-                                            _logger.Trace("created pathmatcher: " + config.ScanDirectory);
-                                            __pathmatchercache[config] = _pathmatcher = new PathMatcher(config);
-                                            ownMatchers = true;
-                                        } else {
-                                            _logger.Trace("pathmatcher cache hit: " + config.ScanDirectory);
-                                            _pathmatcher.Ref();
-                                        }
-                                        _logger.Trace("__pathmatchercache size: " + __pathmatchercache.Count);
-                                    }
-
-                                    if (_grepmatcher != null) {
-                                        if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.Config);
-                                        _grepmatcher = null;
-                                    }
-                                    lock (__grepmatchercache) {
-                                        if (!__grepmatchercache.TryGetValue(config, out _grepmatcher)) {
-                                            _logger.Trace("created grepmatcher: " + config.ScanDirectory);
-                                            __grepmatchercache[config] = _grepmatcher = new GrepMatcher(config);
-                                        } else {
-                                            _logger.Trace("grepmatcher cache hit: " + config.ScanDirectory);
-                                            _grepmatcher.Ref();
-                                        }
-                                        _logger.Trace("__grepmatchercache size: " + __grepmatchercache.Count);
-                                    }
-
-                                    if (ownMatchers) {
-                                        ThreadPool.QueueUserWorkItem(delegate {
-                                            _pathmatcher.Go(null);
-                                            // TODO read files as we're scanning paths
-                                            _grepmatcher.Go(_pathmatcher.Paths);
-                                        });
-                                    }
+                                    var config = new ConfigParser().LoadConfig(s[1])[0];
+                                    _UpdateConfig(config);
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
                                     StringBuilder sb = new StringBuilder();
                                     int i = 0;
-                                    foreach (string m in _grepmatcher.Match(line.Substring(line.IndexOf("match")+6), 200)) {
+                                    foreach (string m in _matcher.GrepMatch(line.Substring(line.IndexOf("match")+6), 200)) {
                                         sb.Append(m);
                                         sb.Append("\n");
                                         i++;
@@ -107,7 +90,7 @@ namespace VimFastFind {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
                                     StringBuilder sb = new StringBuilder();
                                     int i = 0;
-                                    foreach (string m in _pathmatcher.Match(line.Substring(line.IndexOf("match")+6).ToLowerInvariant(), 200)) {
+                                    foreach (string m in _matcher.PathMatch(line.Substring(line.IndexOf("match")+6).ToLowerInvariant(), 200)) {
                                         sb.Append(m);
                                         sb.Append("\n");
                                         i++;
@@ -135,16 +118,10 @@ namespace VimFastFind {
                     try { _client.Close(); } catch { }
                     _client = null;
                 }
-                lock (__pathmatchercache) {
-                    if (_pathmatcher != null) {
-                        if (_pathmatcher.Free()) __pathmatchercache.Remove(_pathmatcher.Config);
-                        _pathmatcher = null;
-                    }
-                }
-                lock (__grepmatchercache) {
-                    if (_grepmatcher != null) {
-                        if (_grepmatcher.Free()) __grepmatchercache.Remove(_grepmatcher.Config);
-                        _grepmatcher = null;
+                lock (__matchercache) {
+                    if (_matcher != null) {
+                        if (_matcher.Free()) __matchercache.Remove(_matcher.Config);
+                        _matcher = null;
                     }
                 }
             }

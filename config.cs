@@ -9,41 +9,46 @@ using YamlDotNet.Core;
 namespace VimFastFind
 {
     public class ConfigYaml {
-        public string ScanDirectory;
+        public List<string> Directories;
         public RulesYaml Rules;
+    }
 
-        public class RulesYaml {
-            public List<string> Include;
-            public List<string> Exclude;
-        }
+    public class RulesYaml {
+        public List<string> Include;
+        public List<string> Exclude;
     }
 
     public class ConfigParser {
         Logger _logger = new Logger("config");
 
-        public DirConfig LoadConfig(string configPath) {
+        public List<DirConfig> LoadConfig(string configPath) {
             using (var sr = new StreamReader(configPath)) {
-                ConfigYaml config;
+                List<ConfigYaml> configs;
                 try {
-                    config = new Deserializer().Deserialize<ConfigYaml>(sr.ReadToEnd());
+                    configs = new Deserializer().Deserialize<List<ConfigYaml>>(sr.ReadToEnd());
                 } catch (YamlException ex) {
+                    _logger.Trace(ex.ToString());
                     return LoadLegacyConfig(configPath);
                 }
 
                 _logger.Trace("Loading config file: {0}", configPath);
-                var rules = new List<MatchRule>();
-                foreach (string pattern in config.Rules.Include)
-                    rules.Add(new MatchRule(true, pattern));
-                foreach (string pattern in config.Rules.Exclude)
-                    rules.Add(new MatchRule(false, pattern));
+                var ret = new List<DirConfig>();
+                foreach (var config in configs) {
+                    var rules = new List<MatchRule>();
+                    foreach (string pattern in config.Rules.Include)
+                        rules.Add(new MatchRule(true, pattern));
+                    foreach (string pattern in config.Rules.Exclude)
+                        rules.Add(new MatchRule(false, pattern));
+                    ret.Add(new DirConfig(configPath, config.Directories[0], rules));
+                }
 
-                var ret = new DirConfig(configPath, config.ScanDirectory, rules);
-                _logger.Trace(ret.ToString());
+                foreach (var o in ret)
+                    _logger.Trace(o.ToString());
                 return ret;
             }
         }
 
-        public DirConfig LoadLegacyConfig(string configPath) {
+        public List<DirConfig> LoadLegacyConfig(string configPath) {
             _logger.Trace("Loading legacy config file: {0}", configPath);
 
             var rules = new List<MatchRule>();
@@ -63,7 +68,7 @@ namespace VimFastFind
 
             var ret = new DirConfig(configPath, Path.GetDirectoryName(configPath), rules);
             _logger.Trace(ret.ToString());
-            return ret;
+            return new List<DirConfig>(){ ret };
         }
     }
 

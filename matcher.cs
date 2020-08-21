@@ -12,7 +12,58 @@ using System.Threading;
 
 namespace VimFastFind
 {
-    public abstract class Matcher : IDisposable {
+    public class Matcher : IDisposable {
+        PathMatcher _pathmatcher;
+        GrepMatcher _grepmatcher;
+        bool _disposed;
+
+        public DirConfig Config { get; private set; }
+
+        public Matcher(DirConfig config) {
+            this.Config = config;
+            _pathmatcher = new PathMatcher(config);
+            _grepmatcher = new GrepMatcher(config);
+        }
+
+        public void Go() {
+            // TODO interleave reading files with initial dir scan
+            _pathmatcher.Go(null);
+            _grepmatcher.Go(_pathmatcher.Paths);
+        }
+
+        public TopN<string> GrepMatch(string s, int count) {
+            return _grepmatcher.Match(s, count);
+        }
+
+        public TopN<string> PathMatch(string s, int count) {
+            return _pathmatcher.Match(s, count);
+        }
+
+        public virtual void Dispose() {
+            if (!_disposed) {
+                _pathmatcher.Dispose();
+                _pathmatcher = null;
+                _grepmatcher.Dispose();
+                _grepmatcher = null;
+                _disposed = true;
+            }
+        }
+
+        int _refcnt = 1;
+        public void Ref() {
+            Interlocked.Increment(ref _refcnt);
+        }
+
+        public bool Free() {
+            if (Interlocked.Decrement(ref _refcnt) == 0) {
+                Dispose();
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public abstract class AbstractMatcher : IDisposable {
         protected string _dir;
         protected List<string> _paths = new List<string>();
         DirectoryWatcher _fswatcher;
@@ -38,7 +89,7 @@ namespace VimFastFind
         }
 
         public DirConfig Config { get; private set; }
-        public Matcher(DirConfig config) {
+        public AbstractMatcher(DirConfig config) {
             this.Config = config;
         }
 
@@ -206,21 +257,9 @@ namespace VimFastFind
                 _fswatcher = null;
             }
         }
-
-        int _refcnt = 1;
-        public void Ref() {
-            Interlocked.Increment(ref _refcnt);
-        }
-        public bool Free() {
-            if (Interlocked.Decrement(ref _refcnt) == 0) {
-                Dispose();
-                return true;
-            }
-            return false;
-        }
     }
 
-    public class PathMatcher : Matcher {
+    public class PathMatcher : AbstractMatcher {
         Logger _logger = new Logger("pathmatch");
         protected override Logger Logger { get { return _logger; } }
 
@@ -267,7 +306,7 @@ namespace VimFastFind
         }
     }
 
-    public class GrepMatcher : Matcher {
+    public class GrepMatcher : AbstractMatcher {
         static LockFreeQueue<KeyValuePair<GrepMatcher, string>> __incomingfiles = new LockFreeQueue<KeyValuePair<GrepMatcher, string>>();
         static AutoResetEvent __queuetrigger = new AutoResetEvent(false);
 
