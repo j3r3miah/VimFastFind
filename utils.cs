@@ -11,6 +11,18 @@ using Mono.Unix.Native;
 
 namespace VimFastFind
 {
+    public static class Utils
+    {
+        public static string GetAbsolutePath(string path, string basedir) {
+            if (path.StartsWith("~/")) {
+                return Path.Combine(
+                        Environment.GetEnvironmentVariable("HOME"),
+                        path.Substring(2));
+            }
+            return Path.GetFullPath(path, basedir);
+        }
+    }
+
     public struct DirectoryEntry
     {
         public string Name { get; private set; }
@@ -518,9 +530,13 @@ namespace VimFastFind
             Dequeue(out result);
             return result;
         }
+
+        public bool IsEmpty { get {
+            return tail == head;
+        } }
     }
 
-    public class TopN<T> : IEnumerable<T> where T : class {
+    public class TopN<T> : IEnumerable<ScoredItem<T>> where T : class {
         class Container : IComparable<Container> {
             public Container(double rel, T item) { Relevance = rel; Item = item; }
             public double Relevance;
@@ -563,11 +579,20 @@ namespace VimFastFind
             }
         }
 
-        public IEnumerator<T> GetEnumerator() {
-            foreach (Container t in _list) yield return t.Item;
+        public IEnumerator<ScoredItem<T>> GetEnumerator() {
+            foreach (Container t in _list) yield return new ScoredItem<T>(t.Item, t.Relevance);
         }
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() {
-            foreach (Container t in _list) yield return t.Item;
+            foreach (Container t in _list) yield return new ScoredItem<T>(t.Item, t.Relevance);
+        }
+    }
+
+    public class ScoredItem<T> {
+        public T Item { get; private set; }
+        public double Score { get; private set; }
+        public ScoredItem(T item, double score) {
+            Item = item;
+            Score = score;
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Text;
@@ -14,8 +15,8 @@ namespace VimFastFind
     }
 
     public class RulesYaml {
-        public List<string> Include;
-        public List<string> Exclude;
+        public List<string> Include = new List<string>();
+        public List<string> Exclude = new List<string>();
     }
 
     public class ConfigParser {
@@ -34,12 +35,12 @@ namespace VimFastFind
                 _logger.Trace("Loading config file: {0}", configPath);
                 var ret = new List<DirConfig>();
                 foreach (var config in configs) {
-                    var rules = new List<MatchRule>();
-                    foreach (string pattern in config.Rules.Include)
-                        rules.Add(new MatchRule(true, pattern));
-                    foreach (string pattern in config.Rules.Exclude)
-                        rules.Add(new MatchRule(false, pattern));
-                    ret.Add(new DirConfig(configPath, config.Directories[0], rules));
+                    var rules = new List<MatchRule>(
+                            Enumerable.Concat(
+                                config.Rules.Exclude.Select(pattern => new MatchRule(false, pattern)),
+                                config.Rules.Include.Select(pattern => new MatchRule(true, pattern))));
+
+                    ret.AddRange(config.Directories.Select(dir => new DirConfig(configPath, dir, rules)));
                 }
 
                 foreach (var o in ret)
@@ -77,6 +78,12 @@ namespace VimFastFind
         public string ScanDirectory { get; private set;  }
         public List<MatchRule> Rules { get; private set; }
 
+        public string ScanDirectoryAbsolute { get {
+            return Utils.GetAbsolutePath(ScanDirectory, Path.GetDirectoryName(ConfigPath));
+        } }
+
+        public string Name { get { return ScanDirectoryAbsolute; } }
+
         public DirConfig(string configPath, string scanDir, List<MatchRule> rules) {
             ConfigPath = configPath;
             ScanDirectory = scanDir;
@@ -85,7 +92,7 @@ namespace VimFastFind
 
         public override int GetHashCode() {
             int res = 0x1AB43C32;
-            res = res * 31 + ScanDirectory.GetHashCode();
+            res = res * 31 + ScanDirectoryAbsolute.GetHashCode();
             foreach (var rule in Rules)
                 res = res * 31 + (rule == null ? 0 : rule.GetHashCode());
             return res;
@@ -94,7 +101,7 @@ namespace VimFastFind
         public override bool Equals(object obj) {
             var o = obj as DirConfig;
             if (o == null) return false;
-            if (ScanDirectory != o.ScanDirectory) return false;
+            if (ScanDirectoryAbsolute != o.ScanDirectoryAbsolute) return false;
             if (Rules.Count != o.Rules.Count) return false;
             for (int i = 0; i < Rules.Count; i++) {
                 if (Rules[i].Equals(o.Rules[i])) continue;
@@ -107,7 +114,7 @@ namespace VimFastFind
             var sb = new StringBuilder();
             sb.AppendLine($"<DirConfig>");
             sb.AppendLine($"  ConfigPath: {ConfigPath}");
-            sb.AppendLine($"  ScanDirectory: {ScanDirectory}");
+            sb.AppendLine($"  ScanDirectory: {ScanDirectoryAbsolute}");
             sb.AppendLine($"  Rules:");
             foreach (var rule in Rules)
                 sb.AppendLine($"    {rule}");

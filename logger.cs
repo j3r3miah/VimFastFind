@@ -8,7 +8,8 @@ namespace VimFastFind {
         static StreamWriter __fw = null;
 
         static Dictionary<string, bool> __enabled = new Dictionary<string, bool> {
-            ["config"] = true,
+            ["cache"] = true,
+            ["config"] = false,
             ["server"] = false,
             ["pathmatch"] = true,
             ["grepmatch"] = true,

@@ -31,12 +31,19 @@ namespace VimFastFind
             _grepmatcher.Go(_pathmatcher.Paths);
         }
 
-        public TopN<string> GrepMatch(string s, int count) {
-            return _grepmatcher.Match(s, count);
+        public IEnumerable<ScoredItem<string>> GrepMatch(string s, int count) {
+            return _grepmatcher.Match(s, count).Select(
+                    match => new ScoredItem<string>(_MakeFullPath(match.Item), match.Score));
         }
 
-        public TopN<string> PathMatch(string s, int count) {
-            return _pathmatcher.Match(s, count);
+        public IEnumerable<ScoredItem<string>> PathMatch(string s, int count) {
+            return _pathmatcher.Match(s, count).Select(
+                    match => new ScoredItem<string>(_MakeFullPath(match.Item), match.Score));
+        }
+
+        string _MakeFullPath(string path) {
+            if (Config.ScanDirectory == ".") return path;
+            return Path.Combine(Config.ScanDirectory, path);
         }
 
         public virtual void Dispose() {
@@ -94,7 +101,7 @@ namespace VimFastFind
         }
 
         public void Go(List<string> paths) {
-            _dir = this.Config.ScanDirectory;
+            _dir = this.Config.ScanDirectoryAbsolute;
             _dir = _dir.Trim();
             while (_dir.Length > 0 && _dir[_dir.Length-1] == Path.DirectorySeparatorChar)
                 _dir = _dir.Substring(0, _dir.Length-1);
@@ -107,10 +114,10 @@ namespace VimFastFind
             if (paths != null) {
                 // grepmatcher does this
                 _paths = paths;
-                Logger.Trace("starting initial load of {0}", this.Config.ScanDirectory);
+                Logger.Trace("starting initial load of {0}", this.Config.Name);
             } else {
                 // pathmatcher does this
-                Logger.Trace("starting initial scan of {0}", this.Config.ScanDirectory);
+                Logger.Trace("starting initial scan of {0}", this.Config.Name);
                 var sw = new System.Diagnostics.Stopwatch();
                 sw.Start();
                 foreach (DirectoryEntry entry in FastDirectoryScanner.RecursiveScan(_dir, skipdir => !IsFileOk(TrimPath(skipdir), true))) {
@@ -120,7 +127,7 @@ namespace VimFastFind
                     }
                 }
                 sw.Stop();
-                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config.ScanDirectory);
+                Logger.Trace("[{0}ms] {1} paths found on initial scan of {2}", sw.ElapsedMilliseconds, _paths.Count, this.Config.Name);
             }
             OnPathsInited();
         }
@@ -256,11 +263,12 @@ namespace VimFastFind
                 try { _fswatcher.Dispose(); } catch { }
                 _fswatcher = null;
             }
+            _paths = null;
         }
     }
 
     public class PathMatcher : AbstractMatcher {
-        Logger _logger = new Logger("pathmatch");
+        Logger _logger = new Logger("path");
         protected override Logger Logger { get { return _logger; } }
 
         public PathMatcher(DirConfig config) : base(config) { }
@@ -301,7 +309,7 @@ namespace VimFastFind
         }
 
         public override void Dispose() {
-            Logger.Trace("disposing " + Config.ConfigPath);
+            Logger.Trace("disposing " + Config.Name);
             base.Dispose();
         }
     }
@@ -314,7 +322,7 @@ namespace VimFastFind
 
         Dictionary<string, string> _contents = new Dictionary<string, string>();
 
-        Logger _logger = new Logger("grepmatch");
+        Logger _logger = new Logger("grep");
         protected override Logger Logger { get { return _logger; } }
 
         static GrepMatcher() {
@@ -362,7 +370,7 @@ namespace VimFastFind
                 }
 
                 sw.Stop();
-                if (count > 0) Logger.TraceFrom("grepmatch", "[{0}ms] {1} files loaded", sw.ElapsedMilliseconds, count);
+                if (count > 0) Logger.TraceFrom("grep", "[{0}ms] {1} files loaded", sw.ElapsedMilliseconds, count);
                 __queuetrigger.WaitOne();
             }
         }
@@ -436,8 +444,10 @@ namespace VimFastFind
         }
 
         public override void Dispose() {
-            Logger.Trace("disposing " + Config.ConfigPath);
+            Logger.Trace("disposing " + Config.Name);
+            Logger.Trace("__incomingfiles.IsEmpty = " + __incomingfiles.IsEmpty);
             base.Dispose();
+            _contents = null;
             dead = true;
         }
     }

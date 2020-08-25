@@ -10,48 +10,65 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
 
-namespace VimFastFind {
+namespace VimFastFind
+{
     class Client {
         static Dictionary<DirConfig, Matcher> __matchercache = new Dictionary<DirConfig, Matcher>();
 
-        Logger _logger = new Logger("server");
-
         TcpClient _client;
-        DirConfig _config;
-        Matcher _matcher;
+        Dictionary<DirConfig, Matcher> _matchers;
+        Logger _logger;
 
         public Client(TcpClient client) {
             _client = client;
+            _matchers = new Dictionary<DirConfig, Matcher>();
+            _logger = new Logger("server");
             (new Thread(ev_client) { IsBackground = true }).Start();
         }
 
-        void _UpdateConfig(DirConfig config) {
-            if (_config != null && _config.Equals(config)) return;
-            _config = config;
+        void _UpdateConfig(List<DirConfig> configs) {
+            var newMatchers = new Dictionary<DirConfig, Matcher>();
+            var needInit = new List<Matcher>();
 
-            bool ownMatchers = false;
-
-            if (_matcher != null) {
-                if (_matcher.Free()) __matchercache.Remove(_matcher.Config);
-                _matcher = null;
-            }
-            lock (__matchercache) {
-                if (!__matchercache.TryGetValue(config, out _matcher)) {
-                    _logger.Trace("created matcher: " + config.ScanDirectory);
-                    __matchercache[config] = _matcher = new Matcher(config);
-                    ownMatchers = true;
-                } else {
-                    _logger.Trace("matcher cache hit: " + config.ScanDirectory);
-                    _matcher.Ref();
+            foreach (DirConfig config in configs) {
+                if (_matchers.ContainsKey(config)) {
+                    newMatchers[config] = _matchers[config];
+                    continue;
                 }
-                _logger.Trace("__matchercache size: " + __matchercache.Count);
+
+                lock (__matchercache) {
+                    Matcher matcher;
+                    if (!__matchercache.TryGetValue(config, out matcher)) {
+                        Logger.TraceFrom("cache", "created matcher: " + config.Name);
+                        __matchercache[config] = matcher = new Matcher(config);
+                        needInit.Add(matcher);
+                    } else {
+                        Logger.TraceFrom("cache", "cache hit: " + config.Name);
+                        matcher.Ref();
+                    }
+                    Logger.TraceFrom("cache", "size: " + __matchercache.Count);
+                    newMatchers[config] = matcher;
+                }
             }
 
-            if (ownMatchers) {
-                ThreadPool.QueueUserWorkItem(delegate {
-                    _matcher.Go();
-                });
+            ThreadPool.QueueUserWorkItem(delegate {
+                foreach (var matcher in needInit) {
+                    try {
+                        matcher.Go();
+                    } catch {
+                        // matcher was disposed when client disconnected early
+                    }
+                }
+            });
+
+            foreach (var kvp in _matchers) {
+                if (!newMatchers.ContainsKey(kvp.Key)) {
+                    if (kvp.Value.Free())
+                        __matchercache.Remove(kvp.Key);
+                }
             }
+
+            _matchers = newMatchers;
         }
 
         void ev_client() {
@@ -71,32 +88,43 @@ namespace VimFastFind {
                                 string[] s = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
 
                                 if (s[0] == "config") {
-                                    var config = new ConfigParser().LoadConfig(s[1])[0];
-                                    _UpdateConfig(config);
+                                    _UpdateConfig(new ConfigParser().LoadConfig(s[1]));
 
                                 } else if (s[0] == "grep" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
+
+                                    var combinedMatches = new TopN<string>(200);
+                                    foreach (Matcher matcher in _matchers.Values) {
+                                        foreach (var match in matcher.GrepMatch(line.Substring(line.IndexOf("match")+6), 200)) {
+                                            combinedMatches.Add(match.Score, match.Item);
+                                        }
+                                    }
+
                                     StringBuilder sb = new StringBuilder();
-                                    int i = 0;
-                                    foreach (string m in _matcher.GrepMatch(line.Substring(line.IndexOf("match")+6), 200)) {
-                                        sb.Append(m);
+                                    foreach (var match in combinedMatches) {
+                                        sb.Append(match.Item);
                                         sb.Append("\n");
-                                        i++;
                                     }
                                     wtr.Write(sb.ToString());
                                     wtr.Write("\n");
 
                                 } else if (s[0] == "find" && s[1] == "match") {
                                     s = line.Split(new char[] { ' ', '\t' }, 3, StringSplitOptions.RemoveEmptyEntries);
+
+                                    var combinedMatches = new TopN<string>(200);
+                                    foreach (Matcher matcher in _matchers.Values) {
+                                        foreach (var match in matcher.PathMatch(line.Substring(line.IndexOf("match")+6).ToLowerInvariant(), 200)) {
+                                            combinedMatches.Add(match.Score, match.Item);
+                                        }
+                                    }
+
                                     StringBuilder sb = new StringBuilder();
-                                    int i = 0;
-                                    foreach (string m in _matcher.PathMatch(line.Substring(line.IndexOf("match")+6).ToLowerInvariant(), 200)) {
-                                        sb.Append(m);
+                                    foreach (var match in combinedMatches) {
+                                        sb.Append(match.Item);
                                         sb.Append("\n");
-                                        i++;
                                     }
                                     wtr.Write(sb.ToString());
-                                    wtr.Write("\n"); // empty line at the end
+                                    wtr.Write("\n");
 
                                 } else if (s[0] == "nop") {
                                     wtr.Write("nop\n");
@@ -119,10 +147,12 @@ namespace VimFastFind {
                     _client = null;
                 }
                 lock (__matchercache) {
-                    if (_matcher != null) {
-                        if (_matcher.Free()) __matchercache.Remove(_matcher.Config);
-                        _matcher = null;
+                    foreach (var kvp in _matchers) {
+                        if (kvp.Value.Free())
+                            __matchercache.Remove(kvp.Key);
                     }
+                    _matchers = null;
+                    Logger.TraceFrom("cache", "size: " + __matchercache.Count);
                 }
             }
         }

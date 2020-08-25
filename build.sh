@@ -39,9 +39,7 @@ cat > ./$BUILD_DIR/VFFServer <<- 'EOM'
 MY_PATH="`dirname \"$0\"`"
 MY_PATH="`( cd \"$MY_PATH\" && pwd )`"
 export DYLD_LIBRARY_PATH="$MY_PATH:$DYLD_LIBRARY_PATH"
-if [ x$GDB = x1 ]; then export MAYBE_DEBUG="gdb --args"; fi
-if [ x$LLDB = x1 ]; then export MAYBE_DEBUG="lldb -o run"; export MAYBE_DEBUG2="--"; fi
-exec $MAYBE_DEBUG mono64 $MAYBE_DEBUG2 --debug "$MY_PATH/VFFServer.exe" "$@"
+exec mono64 --debug "$MY_PATH/VFFServer.exe" "$@"
 EOM
 
 chmod +x ./$BUILD_DIR/VFFServer
