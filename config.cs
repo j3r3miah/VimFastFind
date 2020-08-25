@@ -67,7 +67,7 @@ namespace VimFastFind
                 }
             }
 
-            var ret = new DirConfig(configPath, Path.GetDirectoryName(configPath), rules);
+            var ret = new DirConfig(configPath, ".", rules);
             _logger.Trace(ret.ToString());
             return new List<DirConfig>(){ ret };
         }
@@ -84,6 +84,7 @@ namespace VimFastFind
 
         public string Name { get { return ScanDirectoryAbsolute; } }
 
+        // scanDir, if not absolute, is considered relative to the configPath
         public DirConfig(string configPath, string scanDir, List<MatchRule> rules) {
             ConfigPath = configPath;
             ScanDirectory = scanDir;
