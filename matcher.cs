@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.IO.MemoryMappedFiles;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Text;
 using System.Threading;
 
@@ -316,20 +316,24 @@ namespace VimFastFind
 
     public class GrepMatcher : AbstractMatcher {
         static LockFreeQueue<KeyValuePair<GrepMatcher, string>> __incomingfiles = new LockFreeQueue<KeyValuePair<GrepMatcher, string>>();
-        static AutoResetEvent __queuetrigger = new AutoResetEvent(false);
+        static ManualResetEvent __queuetrigger = new ManualResetEvent(false);
 
         bool dead;
-
-        Dictionary<string, string> _contents = new Dictionary<string, string>();
+        IFileStore _contents;
 
         Logger _logger = new Logger("grep");
         protected override Logger Logger { get { return _logger; } }
 
         static GrepMatcher() {
-            (new Thread(ev_read) { IsBackground = true }).Start();
+            for (int i = 0; i < Settings.ReadThreads; i++)
+                (new Thread(ev_read) { IsBackground = true }).Start();
         }
 
-        public GrepMatcher(DirConfig config) : base(config) { }
+        public GrepMatcher(DirConfig config) : base(config) {
+            _contents = Settings.Compress
+                ? new CompressedFileStore()
+                : (IFileStore) new FileStore();
+        }
 
         static void ev_read() {
             while (true) {
@@ -344,12 +348,8 @@ namespace VimFastFind
                     string file = Path.Combine(kvp.Key._dir, kvp.Value);
                     try {
                         if (!File.Exists(file)) continue;
-                        using (StreamReader r = new StreamReader(file)) {
-                            string v = r.ReadToEnd();
-                            lock (kvp.Key._contents) {
-                                kvp.Key._contents[kvp.Value] = v;
-                            }
-                        }
+                        lock (kvp.Key._contents)
+                            kvp.Key._contents.Add(kvp.Value, file);
 
                     } catch (ArgumentException) {
                         // skipping because this is just a blank file
@@ -371,6 +371,7 @@ namespace VimFastFind
 
                 sw.Stop();
                 if (count > 0) Logger.TraceFrom("grep", "[{0}ms] {1} files loaded", sw.ElapsedMilliseconds, count);
+                __queuetrigger.Reset();
                 __queuetrigger.WaitOne();
             }
         }
@@ -400,9 +401,8 @@ namespace VimFastFind
         }
         protected override void OnPathRenamed(string p1, string p2) {
             lock (_contents) {
-                if (_contents.ContainsKey(p1)) {
-                    _contents[p2] = _contents[p1];
-                    _contents.Remove(p1);
+                if (_contents.Contains(p1)) {
+                    _contents.Rename(p1, p2);
                 }
             }
         }
@@ -410,7 +410,7 @@ namespace VimFastFind
             // Logger.Trace("matching {0} against {1}", path, needle);
             string contents;
             lock (_contents) {
-                if (!_contents.TryGetValue(path, out contents)) {
+                if ((contents = _contents.Get(path)) == null) {
                     // when paths are scanned (in pathmatcher) but not loaded yet)
                     // Logger.Trace("{0} not found", path);
                     score = 0;
@@ -449,6 +449,91 @@ namespace VimFastFind
             base.Dispose();
             _contents = null;
             dead = true;
+        }
+    }
+
+    public interface IFileStore {
+        string Get(string key);
+        bool Contains(string key);
+        void Add(string key, string fullpath);
+        void Rename(string srckey, string destkey);
+        void Remove(string key);
+    }
+
+    public class FileStore : IFileStore {
+        Dictionary<string, string> _dict = new Dictionary<string, string>();
+
+        public string Get(string key) {
+            return _dict[key];
+        }
+
+        public bool Contains(string key) {
+            return _dict.ContainsKey(key);
+        }
+
+        public void Add(string key, string fullpath) {
+            using (var sr = new StreamReader(fullpath))
+                _dict[key] = sr.ReadToEnd();
+        }
+
+        public void Rename(string srckey, string destkey) {
+            _dict[destkey] = _dict[srckey];
+            _dict.Remove(srckey);
+        }
+
+        public void Remove(string key) {
+            _dict.Remove(key);
+        }
+    }
+
+    public class CompressedFileStore : IFileStore {
+        Dictionary<string, byte[]> _dict = new Dictionary<string, byte[]>();
+
+        public string Get(string key) {
+            return _Unzip(_dict[key]);
+        }
+
+        public bool Contains(string key) {
+            return _dict.ContainsKey(key);
+        }
+
+        public void Add(string key, string fullpath) {
+            using (var fs = File.OpenRead(fullpath))
+                _dict[key] = _Zip(fs);
+        }
+
+        public void Rename(string srckey, string destkey) {
+            _dict[destkey] = _dict[srckey];
+            _dict.Remove(srckey);
+        }
+
+        public void Remove(string key) {
+            _dict.Remove(key);
+        }
+
+        static byte[] _Zip(Stream str) {
+            using (var mso = new MemoryStream()) {
+                using (var gs = new DeflateStream(mso, CompressionMode.Compress))
+                    _CopyTo(str, gs);
+                return mso.ToArray();
+            }
+        }
+
+        static string _Unzip(byte[] bytes) {
+            using (var msi = new MemoryStream(bytes))
+            using (var mso = new MemoryStream()) {
+                using (var gs = new DeflateStream(msi, CompressionMode.Decompress))
+                    _CopyTo(gs, mso);
+                return Encoding.UTF8.GetString(mso.ToArray());
+            }
+        }
+
+        static void _CopyTo(Stream src, Stream dest) {
+            byte[] bytes = new byte[8192];
+            int cnt;
+            while ((cnt = src.Read(bytes, 0, bytes.Length)) != 0) {
+                dest.Write(bytes, 0, cnt);
+            }
         }
     }
 }

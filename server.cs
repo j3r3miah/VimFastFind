@@ -158,9 +158,34 @@ namespace VimFastFind
         }
     }
 
-    public class Server {
-        static int Port = 20398;
+    public static class Settings {
+        public static int Port = 20398;
+        public static bool Compress = true;
+        public static int ReadThreads = 2;
 
+        public static bool Update(string[] args) {
+            foreach (string arg in args) {
+                if (arg.StartsWith("-port=")) {
+                    Port = Convert.ToInt32(arg.Substring(6));
+                }
+                else if (arg.StartsWith("-read-threads=")) {
+                    ReadThreads = Convert.ToInt32(arg.Substring(14));
+                }
+                else if (arg.StartsWith("-compress=")) {
+                    Compress = Convert.ToBoolean(arg.Substring(10));
+                }
+                else {
+                    return false;
+                }
+            }
+            Logger.TraceFrom(
+                    "settings", "Port={0}, Compress={1}, ReadThreads={2}",
+                    Port, Compress, ReadThreads);
+            return true;
+        }
+    }
+
+    public class Server {
         static void Usage() {
             Console.WriteLine();
             Console.WriteLine("usage: VFFServer [-port=PORTNUMBER]");
@@ -171,16 +196,12 @@ namespace VimFastFind
         }
 
         public static void Main(string[] args) {
-            if (args.Length != 0) {
-                if (args[0].StartsWith("-port=")) {
-                    Port = Convert.ToInt32(args[0].Substring(6));
-                } else {
-                    Usage();
-                    return;
-                }
+            if (!Settings.Update(args)) {
+                Usage();
+                return;
             }
 
-            TcpListener listener = new TcpListener(IPAddress.Any, Port);
+            TcpListener listener = new TcpListener(IPAddress.Any, Settings.Port);
             listener.Start();
 
             while (true) {
